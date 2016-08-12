@@ -1,11 +1,14 @@
+from collections import namedtuple
+
 import numpy as np
 import mpmath as mp
 import sympy as sp
 
 
-def derive_priors():
-    r""" This function symbolically derives integrands for the
-    HS and HS+ posterior marginals in both lambda and kappa parameterizations.
+def create_symbolic_terms():
+    r""" This function creates symbolic forms for the HS and HS+ priors,
+    symbolically derives integrands for their posterior marginals in
+    both lambda and kappa parameterizations.
 
     The model is
     .. math:
@@ -14,16 +17,15 @@ def derive_priors():
         \\
         \beta_i &\sim \operatorname{N}(0, \lambda^2_i)
 
+    Returns
+    =======
+    A dictionary containing all the symbolic objects.
     """
 
-    lam, tau, sigma = sp.symbols('lambda tau sigma',
-                                 nonnegative=True,
+    lam, tau, sigma = sp.symbols('lambda tau sigma', nonnegative=True,
                                  real=True)
-    kap = sp.Symbol('kappa',
-                    real=True,
-                    nonnegative=True)
-    y = sp.Symbol('y',
-                  real=True)
+    kap = sp.Symbol('kappa', real=True, nonnegative=True)
+    y = sp.Symbol('y', real=True)
 
     # The HS prior in lambda
     hs_prior_lam = 2/(sp.pi * tau * (1+(lam/tau)**2))
@@ -78,18 +80,22 @@ def derive_priors():
     hs_prior_kap_num = sp.lambdify((kap, tau), hs_prior_kap)
     hsp_prior_kap_num = sp.lambdify((kap, tau), hsp_prior_kap)
 
-    return hs_prior_kap_num, hsp_prior_kap_num
+    return locals()
 
 
-def horn_phi1_sym_int(integrand, kap):
-    """ Symbolic integral for Phi_1 function.
+symbol_dict = create_symbolic_terms()
+symbol_obj = namedtuple('hsplus_symbols', symbol_dict.keys())(**symbol_dict)
+
+
+def horn_phi1_int_sympy(integrand, kap):
+    r""" Symbolic integral for :math:`\Phi_1` function.
     """
     aw = sp.Wild("a", exclude=[kap])
-    bw = sp.Wild("b", exclude=[kap])
-    vw = sp.Wild("v", exclude=[kap])
-    sw = sp.Wild("s", exclude=[kap])
-    uw = sp.Wild("u", exclude=[kap])
-    Ow = sp.Wild("O", exclude=[kap])
+    bw = sp.Wild("b", exclude=[kap, aw])
+    vw = sp.Wild("v", exclude=[kap, aw, bw])
+    sw = sp.Wild("s", exclude=[kap, aw, bw, vw])
+    uw = sp.Wild("u", exclude=[kap, aw, bw, vw, sw])
+    Ow = sp.Wild("O", exclude=[kap, aw, bw, vw, sw, uw])
 
     phi1_match_eqn = (-1)**(vw) * Ow * kap**(aw - 1) *\
         (1 - kap)**(bw - 1) * (kap * uw - 1)**(-vw) * sp.exp(-kap * sw)
@@ -117,9 +123,9 @@ def horn_phi1_sym_int(integrand, kap):
 
 
 def horn_phi1_sympy(a, b, g, x, y):
-    i, j = sp.symbols("i j", cls=sp.Dummy, integer=True, positive=True)
+    i, j = sp.symbols("i j", cls=sp.Dummy, integer=True, nonnegative=True)
     res = sp.Sum(sp.RisingFactorial(a, i + j) * sp.RisingFactorial(b, j) /
                  (sp.RisingFactorial(g, i + j) * sp.factorial(i) *
                   sp.factorial(j)) * y**j * x**i,
-                 (i, sp.Integer(0), sp.oo), (j, sp.Integer(0), sp.oo))
+                 (i, sp.S(0), sp.oo), (j, sp.S(0), sp.oo))
     return res
