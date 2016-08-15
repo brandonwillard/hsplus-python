@@ -10,6 +10,13 @@ mp.dps = 7
 def horn_phi1_single(a, b, g, x, y):
     r""" Evaluate the Horn Phi1 function.  Uses the approach of Gordy (1998).
 
+    .. math:
+
+        \Phi_1(\alpha, \beta; \gamma; x, y) =
+        \sum_{m=0}^\infty \sum_{n=0}^\infty
+        \frac{(\alpha)_{m+n} (\beta)_n}{(\gamma)_{m+n} m! n!}
+        y^n x^m
+
     The general expression in `mpmath` is
 
     ```
@@ -20,36 +27,47 @@ def horn_phi1_single(a, b, g, x, y):
     Parameters
     ==========
     a: float
-        This value must satisfy `0 < a < g`.
+        The ::math::`\alpha` parameter.  This value must satisfy
+        ::math::`0 < a < g`.
     b: float
+        The ::math::`\beta` parameter.
     g: float
+        The ::math::`\gamma` parameter.
     x: float
+        The ::math::`x` parameter.
     y: float
-        This value must satisfy `0 <= y < 1`.
+        The ::math::`y` parameter.  This value must satisfy
+        ::math::`0 \leq y < 1`.
 
     Returns
     =======
       The real value of the Horn Phi1 function at the given points.
     """
 
+    if not (0 < a and a < g):
+        raise ValueError("Parameter a must be 0 < a < g")
+
+    if y >= 1:
+        raise ValueError("Parameter y must be 0 <= y < 1")
+
     if 0 <= y and y < 1:
         if x < 0:
             # (T2)
-            res = mp.exp(x) * mp.nsum(lambda m: mp.rf(g - a, m) /
-                                      mp.rf(g, m) * (-x)**m / mp.fac(m) *
-                                      mp.hyp2f1(b, a, g + m, y), [0, mp.inf])
+            res = mp.exp(x)
+            res *= mp.nsum(lambda m: (mp.rf(g - a, m) / mp.rf(g, m)) *
+                           ((-x)**m / mp.fac(m)) *
+                           mp.hyp2f1(b, a, g + m, y),
+                           [0, mp.inf])
         else:
             # (T1)
-            res = mp.nsum(lambda m: mp.rf(a, m) / mp.rf(g, m) *
-                          x**m / mp.fac(m) *
-                          mp.hyp2f1(b, a + m, g + m, y), [0, mp.inf])
-    elif y < 0:
-        # (T4)
-        res = mp.exp(x) * (1 - y)**(-b) * horn_phi1(g - a, b,
-                                                    g, -x, y / (y - 1))
+            res = mp.nsum(lambda m: (mp.rf(a, m) / mp.rf(g, m)) *
+                          (x**m / mp.fac(m)) *
+                          mp.hyp2f1(b, a + m, g + m, y),
+                          [0, mp.inf])
     else:
-        # not defined for y >= 1
-        res = np.nan
+        # (T4)
+        res = mp.exp(x) * (1. - y)**(-b)
+        res *= horn_phi1(g - a, b, g, -x, y / (y - 1.))
 
     return float(res)
 
@@ -57,7 +75,67 @@ def horn_phi1_single(a, b, g, x, y):
 horn_phi1 = np.vectorize(horn_phi1_single)
 
 
-def m_hs(y, sigma, tau, deriv_ord=None):
+def m_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0):
+    r""" Exact evaluation of the marginal posterior for
+    the hypergeometric inverted-beta model.
+
+    In it's most general form, we have for the hypergeometric
+    inverted-beta model given by
+
+    .. math:
+
+        p(y_i, \kappa_i) \propto \kappa_i^{a^\prime - 1} (1-\kappa_i)^{b-1}
+        \left(1/\tau^2 + (1 - 1/\tau^2) \kappa_i\right)^{-1}
+        e^{-\kappa_i s^\prime}
+        \;.
+
+    where ::math::`s^\prime = s + y_i^2 / (2\sigma^2)` and
+    ::math::`a^\prime = a + 1/2`.
+
+    The marginal posterior is
+
+    .. math:
+        m(y_i; \sigma, \tau) = \frac{1}{\sqrt(2 \pi \sigma^2}
+        \exp\left(-\frac{y_i^2}{2 \sigma^2}\right)
+        \frac{\operatorname{B}(a^\prime, b)}{\operatorname{B}(a,b)}
+        \frac{\Phi_1(b, 1, a^\prime + b, s^\prime, 1 - 1/\tau^2)}{
+            \Phi_1(b, 1, a + b, s, 1 - 1/\tau^2)}
+
+    The Horseshoe prior has ::math::`a = b = 1/2, s = 0` and
+    ::math::`\tau = 1`.
+
+    Parameters
+    ==========
+    y: float
+        A single observation.
+    sigma: float
+        Observation variance.
+    tau: float
+        Prior variance scale factor.
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
+
+    Returns
+    =======
+      Numeric value of `m(y; sigma, tau)`.
+    """
+    y_2_sig = 0.5 * np.square(y / sigma)
+    s_p = s + y_2_sig
+    a_p = a + 0.5
+    C = 1. / np.sqrt(2. * np.pi) / sigma
+    res = C * np.exp(-y_2_sig)
+    res *= mp.beta(a_p, b) / mp.beta(a, b)
+    res *= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+    res /= horn_phi1(b, 1., a + b, s, 1. - tau**(-2))
+
+    return res
+
+
+def m_hs(y, sigma, tau=1.):
     r""" Exact evaluation of the marginal posterior of the HS prior via
     special functions.
 
@@ -76,22 +154,33 @@ def m_hs(y, sigma, tau, deriv_ord=None):
     =======
       Numeric value of `m(y; sigma, tau)`.
     """
-    s_p = np.square(y) / (2. * sigma**2)
-    if deriv_ord is None:
-        C = 1./(tau * np.sqrt(2. * np.pi * sigma**2))
-        res = C * np.exp(-s_p) * horn_phi1(0.5, 1., 1.5, s_p, 1.-1./tau**2)
-    elif deriv_ord == 1:
-        C = 2./(3. * tau * np.sqrt(2. * np.pi * sigma**2))
-        res = C * np.exp(-s_p) * horn_phi1(0.5, 1., 2.5, s_p, 1.-1./tau**2)
-    else:
-        return None
-
-    return res
+    return m_hib(y, sigma, tau, 0.5, 0.5, 0)
 
 
-def m_hsp(y, sigma, tau, deriv_ord=None):
-    r""" Exact evaluation of the marginal posterior for
-    the HS+ prior via special functions.
+def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
+    r""" Moments of the hypergeometric inverted-beta model
+    in the ::math::`\kappa` parameterization.
+
+    In it's most general form, we have
+
+    .. math:
+
+        E(\kappa^n \mid y, \sigma, \tau) &=
+        \frac{(a^\prime)_n}{(a^\prime + b)_n}
+        \frac{\Phi_1(b, 1, a^\prime + b + n, s^\prime, 1 - 1/\tau^2)}{
+            \Phi_1(b, 1, a^\prime + b, s^\prime, 1 - 1/\tau^2)}
+            \;,
+
+    where ::math::`s^\prime = s + y_i^2 / (2\sigma^2)` and
+    ::math::`a^\prime = a + 1/2` for the hypergeometric inverted-beta
+    given by
+
+    .. math:
+
+        p(y_i, \kappa_i) \propto \kappa_i^{a^\prime - 1} (1-\kappa_i)^{b-1}
+        \left(1/\tau^2 + (1 - 1/\tau^2) \kappa_i\right)^{-1}
+        e^{-\kappa_i s^\prime}
+        \;.
 
     Parameters
     ==========
@@ -101,132 +190,174 @@ def m_hsp(y, sigma, tau, deriv_ord=None):
         Observation variance.
     tau: float
         Prior variance scale factor.
-    deriv_ord: int or None
-        Order of the derivative.
-
-    Returns
-    =======
-    Numeric value of `m(y; sigma, tau)`.
-    """
-    # TODO: What form?
-    pass
-
-
-def E_k_Z(Z, n=1., tauv=1., sigv=1., hsp=False):
-    r"""
-    TODO:
-
-    Parameters
-    ==========
-    TODO
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
+    n: int
+        Order of the moment.
 
     Results
     =======
     TODO
     """
-    if not hsp:
-        s_p = Z/(2.0*sigv**2)
-        res = (1./mp.rf(1.5, n) *
-               horn_phi1(0.5, 1., 1.5+n, s_p, 1.-1./tauv**2) /
-               horn_phi1(0.5, 1., 1.5, s_p, 1.-1./tauv**2))
+    s_p = s + 0.5 * np.square(y / sigma)
+    a_p = a + 0.5
+    res = float(mp.rf(a_p, n) / mp.rf(a_p + b, n))
+    res *= horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
+    res /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
 
-        assert res >= 0 and res <= 1.0
-
-    return float(res)
+    return res
 
 
-def m_p_Z(Z, p, tauv=1, sigv=1, hsp=False):
-    r""" Computes
+def E_beta(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
+    r""" Moments of the hypergeometric inverted-beta model
+    in the ::math::`\beta` parameterization.
+
+    In it's most general form, we have
+
     .. math:
 
-        \int_0^1 z^{p/2} e^{-z/2} p(z) dz
+        E(\beta^n \mid y, \sigma, \tau) &=
+        \left( 1 - \frac{a^\prime}{a^\prime + b}
+        \frac{\Phi_1(b, 1, a^\prime + b + n, s^\prime, 1 - 1/\tau^2)}{
+            \Phi_1(b, 1, a^\prime + b, s^\prime, 1 - 1/\tau^2)}
+            \right) y
+            \;,
 
-    with special functions.
+    where ::math::`s^\prime = s + y_i^2 / (2\sigma^2)` and
+    ::math::`a^\prime = a + 1/2` for the hypergeometric inverted-beta
+    given by
 
-    a=1/2, b=1/2, s=0 s_p=Z/(2*sigv**2), a_p=1
+    .. math:
+
+        p(y_i, \kappa_i) \propto \kappa_i^{a^\prime - 1} (1-\kappa_i)^{b-1}
+        \left(1/\tau^2 + (1 - 1/\tau^2) \kappa_i\right)^{-1}
+        e^{-\kappa_i s^\prime}
+        \;.
 
     Parameters
     ==========
-    TODO
+    y: float
+        A single observation.
+    sigma: float
+        Observation variance.
+    tau: float
+        Prior variance scale factor.
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
+    n: int
+        Order of the moment.
 
     Results
     =======
     TODO
     """
-    if not hsp:
-        s_p = Z/(2.0*sigv**2)
-        C = (2.0 * mp.pi * sigv**2)**(-p/2.0)
-
-        res = C * mp.exp(-s_p) * 2.0/mp.pi *\
-            horn_phi1(0.5, 1.0, 1.5, s_p, 1-1.0/tauv**2) /\
-            horn_phi1(0.5, 1.0, 1.0, 0.0, 1-1.0/tauv**2)
-
-        assert res >= 0 and res <= 1.0
-
-    else:
-        return None
+    s_p = s + 0.5 * np.square(y / sigma)
+    a_p = a + 0.5
+    res = float(mp.rf(a_p, n) / mp.rf(a_p + b, n))
+    res *= horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
+    res /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
 
     return float(res)
 
 
-def m_p_Z_num(z, p, tauv=1, hsp=False):
-    r""" Numerically integrate
+def m_hib_num(y, sigma, tau=1, a=0.5, b=0.5, s=0):
+    r""" Numerically integrates the hypergeometric
+    inverted beta model, in the ::math::`\kappa` parameterization,
+    given by
+
     .. math:
 
-        \int_0^1 z^{p/2} e^{-z/2} p(z) dz
+        p(y_i, \kappa_i) \propto \kappa_i^{a^\prime - 1} (1-\kappa_i)^{b-1}
+        \left(1/\tau^2 + (1 - 1/\tau^2) \kappa_i\right)^{-1}
+        e^{-\kappa_i s^\prime}
+        \;.
 
 
     Parameters
     ==========
-    hsp: boolean
-        If True, compute using the HS+ prior, otherwise HS.
+    y: float
+        A single observation.
+    sigma: float
+        Observation variance.
+    tau: float
+        Prior variance scale factor.
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
 
     Returns
     =======
-        TODO
+        The numeric integral.
     """
     from .symbolic_funcs import symbol_obj as sym
 
+    # TODO FIXME: Generalize this to HIB.
+
+    z = s + 0.5 * np.square(y / sigma)
     k_pow = mp.fraction(p, 2)
     if hsp:
-        mid_singularity = mp.fraction(1, tauv**4+1)
+        mid_singularity = mp.fraction(1, tau**4+1)
         res = mp.quad(lambda k: k**k_pow * mp.exp(z*k/2) *
-                      sym.lam_hsp_prior_kap(k, tauv),
+                      sym.lam_hsp_prior_kap(k, tau),
                       [0, mid_singularity, 1])
     else:
         # TODO: Also check that this singularity is in [0,1]
-        tau_4 = mp.mpmathify(tauv)**4
-        if tauv >= 1 or 2 < tau_4:
+        tau_4 = mp.mpmathify(tau)**4
+        if tau >= 1 or 2 < tau_4:
             res = mp.quad(lambda k: k**k_pow * mp.exp(z*k/2) *
-                          sym.lam_hs_prior_kap(k, tauv), [0, 1])
+                          sym.lam_hs_prior_kap(k, tau), [0, 1])
         else:
             mid_singularity = mp.fraction(1, tau_4-1)
             res = mp.quad(lambda k: k**k_pow * mp.exp(z*k/2) *
-                          sym.lam_hs_prior_kap(k, tauv),
+                          sym.lam_hs_prior_kap(k, tau),
                           [0, mid_singularity, 1])
 
     return float(res)
 
 
-def hs_mse_z(z, p):
-    r"""
-    Computes HS MSE conditional on Z=z.
+def sure_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0, d=1.):
+    r""" Compute the SURE value for the HIB prior model.
 
     Parameters
     ==========
-    z: float
-        The sum-of-squared observations upon which we condition.
-    p: float or int
-        The degrees of freedom
+    y: float
+        A single observation.
+    sigma: float
+        Observation variance.
+    tau: float
+        Prior variance scale factor.
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
+    d: float
+        Optional observation scaling parameter.
 
     Returns
     =======
     TODO
     """
-
-    part_1 = z * m_p_Z(z, p + 4)/m_p_Z(z, p)
-    E_part = E_k_Z(z)
-    return part_1 - p * E_part - z * E_part**2 / 2.
+    res = 2 * sigma**2
+    E_1 = E_kappa(y, sigma, tau, a, b, s, n=1)
+    y_d_2 = np.square(y * d)
+    res -= y_d_2 * np.square(E_1)
+    E_2 = E_kappa(y, sigma, tau, a, b, s, n=2)
+    res2 = -sigma**2 * E_1 + y_d_2 * E_2
+    res += 2 * res2
+    return res
 
 
 def hs_mse_mc(beta2, p, N=1000):
@@ -249,45 +380,6 @@ def hs_mse_mc(beta2, p, N=1000):
     Z = np.random.noncentral_chisquare(p, beta2, N)
     hs_MSE = p + 2 * np.mean([hs_mse_z(z, p) for z in Z])
     return hs_MSE
-
-
-def E_beta_y(y, sigma, tau):
-    r""" Tweedie's formula for the HS marginal posterior.
-
-    Parameters
-    ==========
-    y: np.array
-        TODO
-    sigma: float
-        TODO
-    tau: float
-        TODO
-
-    Returns
-    =======
-    TODO
-    """
-    return y + m_hs(y, sigma, tau, deriv_ord=1)/m_hs(y, sigma, tau)
-
-
-def Var_beta_y(y, sigma, tau):
-    r""" Tweedie's formula for the HS marginal posterior.
-
-    Parameters
-    ==========
-    y: np.array
-        TODO
-    sigma: float
-        TODO
-    tau: float
-        TODO
-
-    Returns
-    =======
-    TODO
-    """
-    return 1. - m_hs(y, sigma, tau, deriv_ord=2)/m_hs(y, sigma, tau) +\
-        (m_hs(y, sigma, tau, deriv_rd=1)/m_hs(y, sigma, tau))**2
 
 
 def m_hs_num_single(y, tau, sigma):
