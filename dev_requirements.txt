@@ -8,3 +8,4 @@ mpmath==0.19
 scipy==0.17.0
 Pygments==2.0.2
 sympy>=0.7.6
+git+https://github.com/goodok/sympy@sequences

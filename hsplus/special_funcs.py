@@ -1,10 +1,41 @@
 from itertools import izip_longest
 
+from math import ceil
 import numpy as np
 import mpmath as mp
 
 # TODO: mpmath defaults?
 mp.dps = 7
+
+
+def phi1_T1_x(m, a_, b_, g_, x_, y_):
+    res = mp.rf(a_, m) / mp.rf(g_, m)
+    res *= mp.power(x_, m) / mp.fac(m)
+    res *= mp.hyp2f1(b_, a_ + m, g_ + m, y_)
+    return res
+
+
+def phi1_T2_x(m, a_, b_, g_, x_, y_):
+    res = mp.rf(g_ - a_, m) / mp.rf(g_, m)
+    res *= mp.power(-x_, m) / mp.fac(m)
+    res *= mp.hyp2f1(b_, a_, g_ + m, y_)
+    res *= mp.exp(x_)
+    return res
+
+
+def phi1_T3_x(n, a_, b_, g_, x_, y_):
+    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
+    res *= mp.power(y_, n) / mp.fac(n)
+    res *= mp.hyp1f1(a_ + n, g_ + n, x_)
+    return res
+
+
+def phi1_T4_x(n, a_, b_, g_, x_, y_):
+    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
+    res *= mp.power(y_, n) / mp.fac(n)
+    res *= mp.hyp1f1(g_ - a_, g_ + n, -x_)
+    res *= mp.exp(x_)
+    return res
 
 
 def horn_phi1_single(a, b, g, x, y):
@@ -51,25 +82,25 @@ def horn_phi1_single(a, b, g, x, y):
         raise ValueError("Parameter y must be 0 <= y < 1")
 
     if 0 <= y and y < 1:
+        #if mp.chop(y) == 0:
+        #    res = mp.hyp2f1(a, 1, g, x)
+        #else:
+        args = (a, b, g, x, y)
         if x < 0:
-            # (T2)
-            res = mp.exp(x)
-            res *= mp.nsum(lambda m: (mp.rf(g - a, m) / mp.rf(g, m)) *
-                           ((-x)**m / mp.fac(m)) *
-                           mp.hyp2f1(b, a, g + m, y),
-                           [0, mp.inf])
+            if x > -1:
+                res = mp.nsum(lambda n: phi1_T4_x(n, *args), [0, mp.inf])
+            else:
+                res = mp.nsum(lambda n: phi1_T2_x(n, *args), [0, mp.inf])
         else:
-            # (T1)
-            res = mp.nsum(lambda m: (mp.rf(a, m) / mp.rf(g, m)) *
-                          (x**m / mp.fac(m)) *
-                          mp.hyp2f1(b, a + m, g + m, y),
-                          [0, mp.inf])
+            if x > 1:
+                res = mp.nsum(lambda n: phi1_T3_x(n, *args), [0, mp.inf])
+            else:
+                res = mp.nsum(lambda n: phi1_T1_x(n, *args), [0, mp.inf])
     else:
-        # (T4)
-        res = mp.exp(x) * (1. - y)**(-b)
+        res = mp.exp(x) * mp.power(1 - y, -b)
         res *= horn_phi1(g - a, b, g, -x, y / (y - 1.))
 
-    return float(res)
+    return res
 
 
 horn_phi1 = np.vectorize(horn_phi1_single)
@@ -205,9 +236,10 @@ def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     """
     s_p = s + 0.5 * np.square(y / sigma)
     a_p = a + 0.5
-    res = float(mp.rf(a_p, n) / mp.rf(a_p + b, n))
-    res *= horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
-    res /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+    res = mp.rf(a_p, n) / mp.rf(a_p + b, n)
+    res_phis = horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
+    res_phis /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+    res *= res_phis
 
     return res
 
