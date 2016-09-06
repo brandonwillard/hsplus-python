@@ -81,24 +81,25 @@ def horn_phi1_single(a, b, g, x, y):
     if y >= 1:
         raise ValueError("Parameter y must be 0 <= y < 1")
 
-    if 0 <= y and y < 1:
+    if (0 <= y and y < 1):
         #if mp.chop(y) == 0:
         #    res = mp.hyp2f1(a, 1, g, x)
-        #else:
-        args = (a, b, g, x, y)
+        phi_args = (a, b, g, x, y)
         if x < 0:
             if x > -1:
-                res = mp.nsum(lambda n: phi1_T4_x(n, *args), [0, mp.inf])
+                res = mp.nsum(lambda n: phi1_T4_x(n, *phi_args), [0, mp.inf])
             else:
-                res = mp.nsum(lambda n: phi1_T2_x(n, *args), [0, mp.inf])
+                res = mp.nsum(lambda n: phi1_T2_x(n, *phi_args), [0, mp.inf])
         else:
             if x > 1:
-                res = mp.nsum(lambda n: phi1_T3_x(n, *args), [0, mp.inf])
+                res = mp.nsum(lambda n: phi1_T3_x(n, *phi_args), [0, mp.inf])
             else:
-                res = mp.nsum(lambda n: phi1_T1_x(n, *args), [0, mp.inf])
-    else:
+                res = mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
+    elif mp.isfinite(y):
         res = mp.exp(x) * mp.power(1 - y, -b)
         res *= horn_phi1(g - a, b, g, -x, y / (y - 1.))
+    else:
+        raise ValueError("Unhandled y value: {}". format(y))
 
     return res
 
@@ -160,8 +161,14 @@ def m_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0):
     C = 1. / np.sqrt(2. * np.pi) / sigma
     res = C * np.exp(-y_2_sig)
     res *= mp.beta(a_p, b) / mp.beta(a, b)
-    res *= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
-    res /= horn_phi1(b, 1., a + b, s, 1. - tau**(-2))
+
+    if tau > 0:
+        tau_term = 1. - tau**(-2)
+    else:
+        tau_term = mp.ninf
+
+    res *= horn_phi1(b, 1., a_p + b, s_p, tau_term)
+    res /= horn_phi1(b, 1., a + b, s, tau_term)
 
     return res
 
@@ -237,8 +244,14 @@ def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     s_p = s + 0.5 * np.square(y / sigma)
     a_p = a + 0.5
     res = mp.rf(a_p, n) / mp.rf(a_p + b, n)
-    res_phis = horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
-    res_phis /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+
+    if tau > 0:
+        tau_term = 1. - tau**(-2)
+    else:
+        tau_term = mp.ninf
+
+    res_phis = horn_phi1(b, 1., a_p + b + n, s_p, tau_term)
+    res_phis /= horn_phi1(b, 1., a_p + b, s_p, tau_term)
     res *= res_phis
 
     return res
@@ -293,11 +306,19 @@ def E_beta(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     """
     s_p = s + 0.5 * np.square(y / sigma)
     a_p = a + 0.5
-    res = float(mp.rf(a_p, n) / mp.rf(a_p + b, n))
-    res *= horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
-    res /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+    res = a_p / (a_p + b)
 
-    return float(res)
+    if tau > 0:
+        tau_term = 1. - tau**(-2)
+    else:
+        tau_term = mp.ninf
+
+    res *= horn_phi1(b, 1., a_p + b + n, s_p, tau_term)
+    res /= horn_phi1(b, 1., a_p + b, s_p, tau_term)
+    res *= y
+    res = y - res
+
+    return res
 
 
 def m_hib_num(y, sigma, tau=1, a=0.5, b=0.5, s=0):
