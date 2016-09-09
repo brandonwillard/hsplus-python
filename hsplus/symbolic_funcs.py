@@ -1,7 +1,5 @@
 from collections import namedtuple
 
-import numpy as np
-import mpmath as mp
 import sympy as sp
 
 
