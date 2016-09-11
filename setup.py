@@ -1,9 +1,6 @@
 from setuptools import setup, find_packages
-#from Cython.Build import cythonize
 
 version = __import__('hsplus').get_version()
-
-#ext_modules = cythonize("hsplus/*.pyx")
 
 setup(name='hsplus',
       version=version,
@@ -19,12 +16,8 @@ setup(name='hsplus',
       ],
       keywords='mpmath, sympy, bayes, horseshoe prior',
       packages=find_packages(),
-      install_requires=['scipy>=0.17.0',
+      install_requires=[
                         'numpy>=1.10.4',
                         'mpmath>=0.19',
-                        #'Cython>=0.23.4',
-                        'sympy>=0.7.6',
-                        'matplotlib',
                         ],
-      #ext_modules=ext_modules,
       )
