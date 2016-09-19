@@ -109,7 +109,7 @@ def m_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0):
     r""" Exact evaluation of the marginal posterior for
     the hypergeometric inverted-beta model.
 
-    In it's most general form, we have for the hypergeometric
+    In its most general form, we have for the hypergeometric
     inverted-beta model given by
 
     .. math:
@@ -199,7 +199,7 @@ def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     r""" Moments of the hypergeometric inverted-beta model
     in the ::math::`\kappa` parameterization.
 
-    In it's most general form, we have
+    In its most general form, we have
 
     .. math:
 
@@ -261,7 +261,7 @@ def E_beta(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     r""" Moments of the hypergeometric inverted-beta model
     in the ::math::`\beta` parameterization.
 
-    In it's most general form, we have
+    In its most general form, we have
 
     .. math:
 
