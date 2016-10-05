@@ -19,5 +19,6 @@ setup(name='hsplus',
       install_requires=[
                         'numpy>=1.10.4',
                         'mpmath>=0.19',
+                        'sympy>=1.0'
                         ],
       )
