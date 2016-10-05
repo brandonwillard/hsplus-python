@@ -1,9 +1,8 @@
-import random
 import numpy as np
-import mpmath as mp
-#import sympy as sp
+from mpmath import mp, fp
 
-from hsplus.special_funcs import *
+from hsplus.hib_stats import SURE_hib
+from hsplus.horn_function import horn_phi1
 
 
 def horn_phi1_bad(a, b, g, x, y):
@@ -11,11 +10,11 @@ def horn_phi1_bad(a, b, g, x, y):
 
 
 def horn_phi1_bad_lim(a, b, g, x, y):
-    return mp.limit(lambda z: mp.appellf1(a, b, 1 / z, g, x, z * y), 0)
+    return mp.limit(lambda z: mp.appellf1(a, b, 1. / z, g, z * x, y), 0)
 
 
 def horn_phi1_naive(a, b, g, x, y):
-    return mp.nsum(lambda m, n: mp.rf(a, m + n) * mp.rf(b, n) /
+    return mp.nsum(lambda m, n: mp.rf(a, m + n) * mp.rf(b, m) /
                    mp.rf(g, m + n) * x**m * y**n / mp.fac(m) /
                    mp.fac(n), [0, mp.inf], [0, mp.inf])
 
@@ -25,155 +24,76 @@ def test_horn_phi1():
                        float(horn_phi1_bad(0.5, 1, 1, 0, 0)))
 
 
-def test_horn_phi1_numeric():
-
-    #
-    # Test HS marginal integrals against numeric values using
-    #
-    assert np.allclose([float(hs_marg_int_num([0.0], 1.0, 1.0, [1.0]))],
-                       [float(hs_marg_phi1([0.0], 1.0, 1.0, [1.0]))])
-
-    assert np.allclose([float(hs_marg_int_num([0.0], 1.0, 1.0, [2.0]))],
-                       [float(hs_marg_phi1([0.0], 1.0, 1.0, [2.0]))])
-
-    #
-    # Test HS marginal integrals against numeric values using
-    # numeric differentiation.
-    #
-    assert np.allclose(float(mp.diff(lambda x: hs_marg_int_num([x], 1.0, 1.0,
-                                                               [1.0]), 0.0)),
-                       float(mp.diff(lambda x: hs_marg_phi1([x], 1.0, 1.0,
-                                                            [1.0]), 0.0)))
-
-    assert np.allclose(float(mp.diff(lambda x: hs_marg_int_num([x], 1.0, 1.0,
-                                                               [1.0]), 1.0)),
-                       float(mp.diff(lambda x: hs_marg_phi1([x], 1.0, 1.0,
-                                                            [1.0]), 1.0)))
-
-
-def test_horn_phi1_sim():
-    N_reps = 5
-    N = 5
-    tau = 1.0
-    sigma = 1.0
-    beta_true = mp.matrix(N, 1)
-    beta_true[1, 0] = 4.0
-    y_til_reps = N_reps * [None]
-    for n_rep in range(0, N_reps):
-        X = mp.randmatrix(N)
-        U, D, V = mp.svd_r(X)
-        # TODO: could use np.random.multivariate_normal
-        eps = mp.matrix([random.normalvariate(0, 1) for i in xrange(0, N)])
-        y = X * beta_true + tau**2 * eps
-        D_inv = mp.diag(D.apply(lambda x: 1.0/x))
-        y_til = ((V.transpose() * D_inv) * U.transpose()) * y
-        y_til_reps[n_rep] = y_til
-        # this is more precise, but since we already calculated the svd...
-        #y_til = mp.lu_solve(X, y)
-
-    assert np.allclose(float(hs_marg_int_num(y_til_reps[0].transpose().tolist()[0],
-                                             tau, sigma,
-                                             D.transpose().tolist()[0])),
-                       float(hs_marg_phi1(y_til_reps[0].transpose().tolist()[0], tau,
-                                          sigma, D.transpose().tolist()[0])))
-
-
-def test_sure():
-    #from hsplus.special_funcs import m_hib, sure_hib, E_kappa, horn_phi1
-
-    tau = 1.0
-    sigma = 1.
-
+def test_sure_point():
     alpha_d_val_1 = 1.53522076e+01
-    sure_val_1 = sure_hib(alpha_d_val_1, 1., 1.)
-    np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=3)
-
-    alpha_d_val_2 = 1.53522076246375913655128897516988217830657958984375e+01
-    sure_val_2 = sure_hib(alpha_d_val_2, 1., 1.)
-    np.testing.assert_almost_equal(sure_val_2, 2.03431435, decimal=3)
+    sure_val_1 = SURE_hib(alpha_d_val_1, 1., 1.)
+    np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=5)
 
 
-def sure_scratch():
-    alpha_d_val_3 = 114.
-    sure_hib(alpha_d_val_3, 1., 1.)
+def _test_asymptotics():
+    """ The ratios of marginal posteriors and their derivatives,
+    .. math:
+        \frac{m^\prime(y)}{m(y)} \;,
 
-    # horn_phi1_single args:
-    a = 0.5
-    a = mp.fraction(1, 2)
-    b = 1.0
-    g = 4.5
-    g = mp.fraction(9, 2)
-    # for the denominator Phi1 term...
-    g = 3.5
-    g = mp.fraction(7, 2)
-    x = 6498.0
-    y = 0.0
+    (e.g. SURE) given by
 
-    #res_phis = horn_phi1(b, 1., a_p + b + n, s_p, 1. - tau**(-2))
-    #res_phis /= horn_phi1(b, 1., a_p + b, s_p, 1. - tau**(-2))
+    .. math:
+        m(y) \propto \Phi_1(b, 1, a^\prime + b; s^\prime, 1 - \tau^{-2})
+        \\
+        \frac{d m}{dy}(y) \equiv m^\prime(y) \propto
+        \Phi_1(b, 1, a^\prime + b + 1; s^\prime, 1 - \tau^{-2})
+        \;,
 
-    #mp.hyper2d({'m+n':a, 'n':b}, {'m+n':g}, x, y)
+    for :math:`s^\prime = s + y^2/(2 \sigma^2)` and
+    :math:`a^\prime = a + 1/2`, are sensitive to large :math:`y`.
+    Sometimes these ratios converge, so we need to a stable, fast numeric
+    approach that also converges.
 
-    def T1(m):
-        res = mp.rf(a, m) / mp.rf(g, m)
+    .. note:
+        :math:`a = b = 1/2, s = 0` for the Horseshoe prior.
 
-        # This term is very large until about
-        # m >= 3 * np.ceil(x)
-        res *= mp.power(x, m) / mp.fac(m)
+    """
+    # CCH/m(y) params:
+    mp.dps = 15
+    z_1, z_2 = 421.25, 0.
+    #z_1, z_2 = 10., 0.
 
-        res *= mp.hyp2f1(b, a + m, g + m, y)
+    (horn_phi1_naive(1/2., 1., 3/2., z_1, z_2) /
+     horn_phi1_naive(1/2., 1., 1., z_1, z_2))
+    # mpf('0.16716563382409313')
 
-        return res
+    (horn_phi1_naive(1/2., 1., 3/2., z_1, z_2) /
+     horn_phi1_naive(1/2., 1., 3/2, z_1, z_2))
 
-    m_x = int(3 * np.ceil(x))
+    # Denominator of derivative term
+    mp.appellf1(alpha, beta_, 1., gamma_d1, z_1, z_2)
 
-    m_range = xrange(0, m_x, m_x // 100)
-    t1_vals = np.array([T1(m_) for m_ in m_range], dtype=np.object)
+    # m(y) calc has this ratio:
+    mp.appellf1(alpha, beta_, 1., gamma_, z_1, z_2)
+    mp.appellf1(alpha, beta_, 1., gamma_denom, z_1_denom, z_2)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.clear()
-    ax.plot(m_range, t1_vals)
-    ax.set_yscale('log', basey=1000)
-    fig.tight_layout()
+    # Here's an F1 expansion around z_1 -> inf
+    mp.appellf1(alpha, beta_, 1., gamma_, z_1, z_2)
 
-    res = mp.nsum(T1, [0, mp.inf],
-                  method='l+s',  # 'r+s+l+a+e+d'
-                  maxterms=10 * m_x,  # 10 * mp.dps
-                  verbose=True,
-                  steps=m_x // 3 * np.arange(1, 4, 1)
-                  #steps=[int(3 * np.ceil(x))] + np.arange(10, 100, 10)
-                  )
+    def F1_z1_inf(alpha, beta_1, beta_2, gamma_, z_1, z_2):
+        res_1 = mp.gamma(gamma_) * mp.gamma(beta_1 - alpha)
+        res_1 /= mp.gamma(gamma_ - alpha) * mp.gamma(beta_1)
+        res_1 *= (-z_1)**(-alpha)
+        res_1 *= mp.appellf1(alpha, alpha - gamma_ + 1,
+                             beta_2, alpha - beta_1 + 1,
+                             1./z_1, z_2/z_1)
+        res_2 = mp.gamma(gamma_) / mp.gamma(alpha)
+        res_2 *= (-z_1)**(-beta_1)
+        res_2 *= mp.nsum(lambda k:
+                         mp.gamma(alpha + k - beta_1) * mp.rf(beta_2, k) /
+                         (mp.gamma(gamma_ + k - beta_1) * mp.fac(k)) *
+                         mp.hyp2f1(beta_1,
+                                   beta_1 - gamma_ - k + 1,
+                                   beta_1 - alpha - k + 1,
+                                   1./z_1) *
+                         z_2**k, [0, mp.inf])
 
-    res = mp.nsum(lambda m: (mp.rf(a, m) / mp.rf(g, m)) *
-                  # This term is very large until about
-                  # m >= 3 * np.ceil(x)
-                  (x**m / mp.fac(m)) *
-                  mp.hyp2f1(b, a + m, g + m, y), #, asymp_tol=1e-4),
-                  [0, mp.inf],
-                  method='l+s',  # 'r+s+l+a+e+d'
-                  maxterms=10 * int(3 * np.ceil(x)),  # 10 * mp.dps
-                  verbose=True,
-                  steps=int(3 * np.ceil(x)) // 3 * np.arange(1, 4, 1)
-                  #steps=[int(3 * np.ceil(x))] + np.arange(10, 100, 10)
-                  )
+        return res_1 + res_2
 
-    mp.mpf('7.5911198071895191e+2810') / mp.mpf('4.0890989741902681e+2807')
-
-    mp.hyp2f1(a, 1, g, x, asymp_tol=1e-4)
-    (1. - x)**(-a) * mp.hyp2f1(a, g-1, g, x/(x-1.), asymp_tol=1e-4)
-
-    / mp.hyp2f1(a, 1, g - 1, x, asymp_tol=1e-4)
-
-    # (T3)
-    res = mp.nsum(lambda m: (mp.rf(a, m) * mp.rf(b, m) / mp.rf(g, m)) *
-                  (y**m / mp.fac(m)) *
-                  mp.hyp1f1(a + m, g + m, x),
-                  [0, mp.inf],
-                  method='e' # 'r+s+l+a+e+d'
-                  )
-
-    res = mp.exp(x)
-    res *= mp.nsum(lambda m: (mp.rf(g - a, m) / mp.rf(g, m)) *
-                    ((-x)**m / mp.fac(m)) *
-                    mp.hyp2f1(b, a, g + m, y),
-                    [0, mp.inf])
+    mp.appellf1(alpha, beta, 1., gamma_, z_1, z_2)
+    F1_z1_inf(alpha, beta, 1., gamma_, z_1, z_2)

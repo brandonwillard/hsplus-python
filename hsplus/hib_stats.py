@@ -1,113 +1,17 @@
+# -*- coding: utf-8 -*-
 import numpy as np
-import mpmath as mp
+from mpmath import mp, fp
 
-# TODO: mpmath defaults?
-mp.dps = 7
+from .horn_function import horn_phi1
 
-
-def phi1_T1_x(m, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, m) / mp.rf(g_, m)
-    res *= mp.power(x_, m) / mp.fac(m)
-    res *= mp.hyp2f1(b_, a_ + m, g_ + m, y_)
-    return res
+# XXX: What mpmath defaults do we want?  Just making it low for speed?
+mp.dps = 5
 
 
-def phi1_T2_x(m, a_, b_, g_, x_, y_):
-    res = mp.rf(g_ - a_, m) / mp.rf(g_, m)
-    res *= mp.power(-x_, m) / mp.fac(m)
-    res *= mp.hyp2f1(b_, a_, g_ + m, y_)
-    res *= mp.exp(x_)
-    return res
-
-
-def phi1_T3_x(n, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
-    res *= mp.power(y_, n) / mp.fac(n)
-    res *= mp.hyp1f1(a_ + n, g_ + n, x_)
-    return res
-
-
-def phi1_T4_x(n, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
-    res *= mp.power(y_, n) / mp.fac(n)
-    res *= mp.hyp1f1(g_ - a_, g_ + n, -x_)
-    res *= mp.exp(x_)
-    return res
-
-
-def horn_phi1_single(a, b, g, x, y):
-    r""" Evaluate the Horn Phi1 function.  Uses the approach of Gordy (1998).
-
-    .. math:
-
-        \Phi_1(\alpha, \beta; \gamma; x, y) =
-        \sum_{m=0}^\infty \sum_{n=0}^\infty
-        \frac{(\alpha)_{m+n} (\beta)_n}{(\gamma)_{m+n} m! n!}
-        y^n x^m
-
-    The general expression in `mpmath` is
-
-    ```
-      nsum(lambda m,n: rf(a,m+n)*rf(b,n)/rf(g,m+n)*\
-        x**m*y**n/fac(m)/fac(n), [0,inf], [0,inf])
-    ```
-
-    Parameters
-    ==========
-    a: float
-        The ::math::`\alpha` parameter.  This value must satisfy
-        ::math::`0 < a < g`.
-    b: float
-        The ::math::`\beta` parameter.
-    g: float
-        The ::math::`\gamma` parameter.
-    x: float
-        The ::math::`x` parameter.
-    y: float
-        The ::math::`y` parameter.  This value must satisfy
-        ::math::`0 \leq y < 1`.
-
-    Returns
-    =======
-    ndarray of mpmath.mpf
-      The real value of the Horn Phi1 function at the given points.
-    """
-
-    if not (0 < a and a < g):
-        raise ValueError("Parameter a must be 0 < a < g")
-
-    if y >= 1:
-        raise ValueError("Parameter y must be 0 <= y < 1")
-
-    if (0 <= y and y < 1):
-        #if mp.chop(y) == 0:
-        #    res = mp.hyp2f1(a, 1, g, x)
-        phi_args = (a, b, g, x, y)
-        if x < 0:
-            if x > -1:
-                res = mp.nsum(lambda n: phi1_T4_x(n, *phi_args), [0, mp.inf])
-            else:
-                res = mp.nsum(lambda n: phi1_T2_x(n, *phi_args), [0, mp.inf])
-        else:
-            if x > 1:
-                res = mp.nsum(lambda n: phi1_T3_x(n, *phi_args), [0, mp.inf])
-            else:
-                res = mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
-    elif mp.isfinite(y):
-        res = mp.exp(x) * mp.power(1 - y, -b)
-        res *= horn_phi1(g - a, b, g, -x, y / (y - 1.))
-    else:
-        raise ValueError("Unhandled y value: {}". format(y))
-
-    return res
-
-
-horn_phi1 = np.vectorize(horn_phi1_single)
-
-
-def m_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0):
-    r""" Exact evaluation of the marginal posterior for
-    the hypergeometric inverted-beta model.
+def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
+                 horn_phi1_fn=horn_phi1):
+    r""" Computation of the marginal posterior for the hypergeometric
+    inverted-beta model.
 
     In its most general form, we have for the hypergeometric
     inverted-beta model given by
@@ -166,13 +70,14 @@ def m_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0):
     else:
         tau_term = mp.ninf
 
-    res *= horn_phi1(b, 1., a_p + b, s_p, tau_term)
-    res /= horn_phi1(b, 1., a + b, s, tau_term)
+    # TODO, FIXME: Replace with direct computation of this ratio.
+    res *= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
+    res /= horn_phi1_fn(b, 1., a + b, s, tau_term)
 
     return res
 
 
-def m_hs(y, sigma, tau=1.):
+def m_hs(y, sigma=1., tau=1.):
     r""" Exact evaluation of the marginal posterior of the HS prior via
     special functions.
 
@@ -184,8 +89,6 @@ def m_hs(y, sigma, tau=1.):
         Observation variance.
     tau: float
         Prior variance scale factor.
-    deriv_ord: int or None
-        Order of the derivative.
 
     Returns
     =======
@@ -195,7 +98,8 @@ def m_hs(y, sigma, tau=1.):
     return m_hib(y, sigma, tau, 0.5, 0.5, 0)
 
 
-def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
+def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
+            horn_phi1_fn=horn_phi1):
     r""" Moments of the hypergeometric inverted-beta model
     in the ::math::`\kappa` parameterization.
 
@@ -250,14 +154,17 @@ def E_kappa(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     else:
         tau_term = mp.ninf
 
-    res_phis = horn_phi1(b, 1., a_p + b + n, s_p, tau_term)
-    res_phis /= horn_phi1(b, 1., a_p + b, s_p, tau_term)
+    # TODO, FIXME: Replace with direct computation of this ratio.
+    res_phis = horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term)
+    res_phis /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
+
     res *= res_phis
 
     return res
 
 
-def E_beta(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
+def E_beta(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
+           horn_phi1_fn=horn_phi1):
     r""" Moments of the hypergeometric inverted-beta model
     in the ::math::`\beta` parameterization.
 
@@ -313,15 +220,17 @@ def E_beta(y, sigma, tau=1., a=0.5, b=0.5, s=0, n=1):
     else:
         tau_term = mp.ninf
 
-    res *= horn_phi1(b, 1., a_p + b + n, s_p, tau_term)
-    res /= horn_phi1(b, 1., a_p + b, s_p, tau_term)
+    # TODO, FIXME: Replace with direct computation of this ratio.
+    res *= horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term)
+    res /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
+
     res *= y
     res = y - res
 
     return res
 
 
-def sure_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0, d=1.):
+def SURE_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
     r""" Compute the SURE value for the HIB prior model.
 
     Parameters
@@ -355,66 +264,81 @@ def sure_hib(y, sigma, tau=1., a=0.5, b=0.5, s=0, d=1.):
     return res
 
 
-def hs_mse_mc(beta2, p, N=1000):
-    r""" Samples observations sum-of-squares and computes the mean
-    MSE for HS.
+def DIC_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
+    r""" Computes DIC estimate for the hypergeometric inverted-beta model.
 
-    Parameters
-    ==========
-    beta2: float
-        The magnitude of the true signal squared.
-    p: float or int
-        Degrees of freedom/number of observations.
-    N: int
-        Number of samples used to approximate the posterior expected value.
-
-    Returns
-    =======
-    TODO
-    """
-    Z = np.random.noncentral_chisquare(p, beta2, N)
-    hs_MSE = p + 2 * np.mean([hs_mse_z(z, p) for z in Z])
-    return hs_MSE
-
-
-def m_hs_num_single(y, tau, sigma):
-    r""" HS marginal integral evaluated by numeric integration.
-
-    Given
-    .. math:
-
-        (y \mid \sigma^2, \tau^2, \lambda_i^2) \sim N(0, \sigma^2 (1 + \tau^2 \lambda_i^2))
-
-    this function computes
-
-    .. math:
-
-        \prod_i \int_0^\infty p(y \mid \sigma^2, \tau^2, \lambda_i^2) p(\lambda_i) d\lambda_i
+    .. math::
+        \text{DIC} = \sum_{i=1}^N \left\{
+        2 \left(1 - E\left[\kappa_i \mid y_i\right] \right) +
+        \frac{y_i^2}{\sigma^2} \left( 2 E\left[\kappa_i^2 \mid y_i\right] -
+            {E\left[\kappa_i \mid y_i\right]}^2 \right)
+        \right\}
 
 
     Parameters
     ==========
     y: float
-        Observation.
-    tau: float
-        Positive prior variance term.
+        A single observation.
     sigma: float
-        Positive observation variance term.
+        Observation variance.
+    tau: float
+        Prior variance scale factor.
+    a: float
+        Hypergeometric inverted-beta model parameter
+    b: float
+        Hypergeometric inverted-beta model parameter
+    s: float
+        Hypergeometric inverted-beta model parameter
+    d: float
+        Optional observation scaling parameter.
 
     Returns
     =======
-    Value of numeric marginal integral.
+    ndarray (float)
+
     """
 
-    C = 1./mp.sqrt(2. * mp.pi)
+    E_1 = np.fromiter((float(v_)
+                       for v_ in E_kappa(y, sigma, tau, a, b, s, n=1)),
+                      dtype=np.float)
+    E_2 = np.fromiter((float(v_)
+                       for v_ in E_kappa(y, sigma, tau, a, b, s, n=2)),
+                      dtype=np.float)
 
-    def quad_expr(lam):
-        var_res = sigma**2 * (1. + tau**2 * lam**2)
-        res = mp.exp(-y**2 / (2. * var_res)) /\
-            ((1. + lam**2) * mp.sqrt(var_res))
+    res = 2.*(1. - E_1) + (y * d / sigma)**2 * (2. * E_2 - E_1**2)
+
+    return res
+
+
+def horn_phi1_quad_single(a, b, g, x, y):
+    r""" Finite precision quadrature computation of Humbert :math:`\Phi_1`.
+
+    See Also
+    --------
+    horn_phi1_single: Series computation of Humbert :math:`\Phi_1`.
+    """
+    if not (0 < a and a < g):
+        # FIXME: Too restrictive: c-a < 0 can be non-integer.
+        raise ValueError("Parameter a must be 0 < a < g")
+
+    if y >= 1:
+        raise ValueError("Parameter y must be 0 <= y < 1")
+
+    def phi_1_integrand_num(t):
+        res_ = t**(a-1.) * (1.-t)**(g-a-1.)
+        res_ *= fp.exp(y * t) / (1.-x*t)**b
+        return res_
+
+    try:
+        res = fp.gamma(g)/fp.gamma(a)/fp.gamma(g-a)
+        res *= fp.quad(phi_1_integrand_num, [0, 1])
+
         return res
+    except:
+        # TODO: Could check |y| >> 1 and guess at the result being inf.
+        return fp.nan
 
-    return float(C * mp.quad(lambda lam: quad_expr(lam), [0, mp.inf]))
 
+m_hib = np.vectorize(m_hib_single)
 
-m_hs_num = np.vectorize(m_hs_num_single)
+horn_phi1_quad = np.vectorize(horn_phi1_quad_single)
