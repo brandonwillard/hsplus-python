@@ -9,37 +9,79 @@ from sympy.core.symbol import Dummy
 from sympy.functions.special.hyper import TupleParametersBase, _prep_tuple
 
 
+mp_ctx = mp
+
+
 def phi1_T1_x(m, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, m) / mp.rf(g_, m)
-    res *= mp.power(x_, m) / mp.fac(m)
-    res *= mp.hyp2f1(b_, a_ + m, g_ + m, y_)
+    r""" Series terms for :math:`Phi_1(a, b, g; x, y)`.
+
+    This series is in powers of :math:`x`.
+
+    TODO: If |y| >> 1, we could try:
+
+      res *= exp(y_) * hyp1f1(g_ - a_, g_ + n, -y_)
+
+    and move the `exp(x_)` outside the sum.  In ratios we
+    might even be able to do this to both terms and divide out
+    `exp(x_)` entirely.
+    """
+    res = mp_ctx.rf(a_, m) / mp_ctx.rf(g_, m)
+    res *= mp_ctx.power(x_, m) / mp_ctx.fac(m)
+    res *= mp_ctx.hyp2f1(b_, a_ + m, g_ + m, y_)
     return res
 
 
 def phi1_T2_x(m, a_, b_, g_, x_, y_):
-    res = mp.rf(g_ - a_, m) / mp.rf(g_, m)
-    res *= mp.power(-x_, m) / mp.fac(m)
-    res *= mp.hyp2f1(b_, a_, g_ + m, y_)
-    res *= mp.exp(x_)
+    r""" Scaled series terms for :math:`\exp(-x) Phi_1(a, b, g; x, y)`.
+
+    This series is in powers of :math:`-x`.
+    """
+    res = mp_ctx.rf(g_ - a_, m) / mp_ctx.rf(g_, m)
+    res *= mp_ctx.power(-x_, m) / mp_ctx.fac(m)
+    res *= mp_ctx.hyp2f1(b_, a_, g_ + m, y_)
     return res
 
 
-def phi1_T3_x(n, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
-    res *= mp.power(y_, n) / mp.fac(n)
-    res *= mp.hyp1f1(a_ + n, g_ + n, x_)
+def phi1_T3_y(n, a_, b_, g_, x_, y_):
+    r""" Series terms for :math:`Phi_1(a, b, g; x, y)`.
+
+    This series is in powers of :math:`y`.
+
+    TODO: It might be possible to divide out the
+    `mp_ctx.exp(x_)` terms in ratios.
+    """
+    r"""
+    TODO: If x >> 1, we could try:
+
+      res *= mp_ctx.exp(x_) * mp_ctx.hyp1f1(g_ - a_, g_ + n, -x_)
+
+    and move the `mp_ctx.exp(x_)` outside the sum.  In ratios we
+    might even be able to do this to both terms and divide out
+    `mp_ctx.exp(x_)` entirely.
+    """
+    res = mp_ctx.rf(a_, n) * mp_ctx.rf(b_, n) / mp_ctx.rf(g_, n)
+    res *= mp_ctx.power(y_, n) / mp_ctx.fac(n)
+    #if mp_ctx.abs(x_) >= 1.:
+    #    res *= mp_ctx.hyp1f1(g_ - a_, g_ + n, -x_)
+    #    res *= mp_ctx.exp(x_)
+    #else:
+    #    res *= mp_ctx.hyp1f1(a_ + n, g_ + n, x_)
+    res *= mp_ctx.hyp1f1(a_ + n, g_ + n, x_)
     return res
 
 
-def phi1_T4_x(n, a_, b_, g_, x_, y_):
-    res = mp.rf(a_, n) * mp.rf(b_, n) / mp.rf(g_, n)
-    res *= mp.power(y_, n) / mp.fac(n)
-    res *= mp.hyp1f1(g_ - a_, g_ + n, -x_)
-    res *= mp.exp(x_)
+def phi1_T4_y(n, a_, b_, g_, x_, y_):
+    r""" Scaled series terms for :math:`\exp(-x) Phi_1(a, b, g; x, y)`.
+
+    This series is in powers of :math:`y`.
+    """
+    res = mp_ctx.rf(a_, n) * mp_ctx.rf(b_, n) / mp_ctx.rf(g_, n)
+    res *= mp_ctx.power(y_, n) / mp_ctx.fac(n)
+    res *= mp_ctx.hyp1f1(g_ - a_, g_ + n, -x_)
     return res
 
 
-def horn_phi1_gordy_single(a, b, g, x, y):
+def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
     r""" Infinite precision computation of the Horn :math:`Phi_1` function.
     Uses the approach of [Gordy]_.
 
@@ -71,6 +113,9 @@ def horn_phi1_gordy_single(a, b, g, x, y):
     y: float
         The ::math::`y` parameter.  This value must satisfy
         ::math::`0 \leq y < 1`.
+    keep_exp_const: bool (optional)
+        Include constant multipliers in `exp(x)` and ``exp(y)``.  Set this to
+        `False` when computing ratios with equal ``x`` and ``y`` parameters.
 
     Returns
     =======
@@ -81,43 +126,69 @@ def horn_phi1_gordy_single(a, b, g, x, y):
         Distributions,” 1998.
     """
 
-    if not (0 < a and a < g):
+    if not (0 <= a and a < g):
         raise ValueError("Parameter a must be 0 < a < g")
 
     if y >= 1:
         raise ValueError("Parameter y must be 0 <= y < 1")
 
     if (0 <= y and y < 1):
-        #if mp.chop(y) == 0:
-        #    res = mp.hyp2f1(a, 1, g, x)
+        #if mp_ctx.chop(y) == 0:
+        #    res = mp_ctx.hyp2f1(a, 1, g, x)
         phi_args = (a, b, g, x, y)
         if x < 0:
             if x > -1:
-                res = mp.nsum(lambda n: phi1_T4_x(n, *phi_args), [0, mp.inf])
+                # -1 < x < 0
+                res = mp_ctx.nsum(lambda n: phi1_T4_y(n, *phi_args),
+                                  [0, mp_ctx.inf])
+                if keep_exp_const:
+                    res *= mp_ctx.exp(x)
             else:
-                res = mp.nsum(lambda n: phi1_T2_x(n, *phi_args), [0, mp.inf])
+                # x <= -1
+
+                #res = mp_ctx.nsum(lambda n: phi1_T2_x(n, *phi_args),
+                #                  [0, mp_ctx.inf])
+                #if keep_exp_const:
+                #    res *= mp_ctx.exp(x)
+                res = mp_ctx.nsum(lambda n: phi1_T3_y(n, *phi_args),
+                                  [0, mp_ctx.inf])
         else:
-            if x > 1:
-                res = mp.nsum(lambda n: phi1_T3_x(n, *phi_args), [0, mp.inf])
+            if x >= 1:
+                # TODO, XXX: Large values aren't handled well!  This is
+                # probably where quadrature will (slightly) outperform:
+                #   res = horn_phi1_quad_single(*phi_args)
+
+                #res = mp_ctx.nsum(lambda n: phi1_T3_y(n, *phi_args),
+                #                  [0, mp_ctx.inf])
+
+                res = mp_ctx.nsum(lambda n: phi1_T4_y(n, *phi_args),
+                                  [0, mp_ctx.inf])
+                if keep_exp_const:
+                    res *= mp_ctx.exp(x)
             else:
-                res = mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
+                # 0 <= x <= 1
+                res = mp_ctx.nsum(lambda n: phi1_T1_x(n, *phi_args),
+                                  [0, mp_ctx.inf])
     elif mp.isfinite(y):
-        res = mp.exp(x) * mp.power(1 - y, -b)
-        res *= horn_phi1_gordy_single(g - a, b, g, -x, y / (y - 1.))
+        res = mp_ctx.power(1 - y, -b)
+        res *= horn_phi1_gordy_single(g - a, b, g, -x, y / (y - 1.),
+                                      keep_exp_const=keep_exp_const)
+        if keep_exp_const:
+            res *= mp_ctx.exp(x)
     else:
         raise ValueError("Unhandled y value: {}". format(y))
 
     return res
 
 
-def horn_phi1_quad_single(a, b, g, x, y):
+def horn_phi1_quad_single(a, b, g, x, y, **kwargs):
     r""" Finite precision quadrature computation of Humbert :math:`\Phi_1`.
 
     See Also
     --------
     horn_phi1_gordy_single: Series computation of Humbert :math:`\Phi_1`.
     """
-    if not (0 < a and a < g):
+    if not (0 <= a and a < g):
         # FIXME: Too restrictive: c-a < 0 can be non-integer.
         raise ValueError("Parameter a must be 0 < a < g")
 
@@ -249,6 +320,17 @@ class HornPhi1(TupleParametersBase):
             v = horn_phi1_gordy_single(a, b, g, x, y)
 
         return Expr._from_mpmath(v, prec)
+
+    def fdiff(self, argindex=3):
+        import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
+
+        if argindex != 3:
+            raise ArgumentIndexError(self, argindex)
+
+        nap = Tuple(*[a + 1 for a in self.ap])
+        nbq = Tuple(*[b + 1 for b in self.bq])
+        fac = sp.Mul(*self.ap)/sp.Mul(*self.bq)
+        return fac*sp.hyper(nap, nbq, self.argument)
 
     def summand(self, m, n):
         r""" Returns the summand that defines this confluent hypergeometric series.

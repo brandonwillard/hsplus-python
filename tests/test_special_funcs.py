@@ -24,10 +24,28 @@ def test_horn_phi1():
                        float(horn_phi1_bad(0.5, 1, 1, 0, 0)))
 
 
-def test_sure_point():
+def test_sure_points():
     alpha_d_val_1 = 1.53522076e+01
-    sure_val_1 = SURE_hib(alpha_d_val_1, 1., 1.)
-    np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=5)
+    sure_val_1 = SURE_hib(alpha_d_val_1, sigma=1., tau=1.)
+    np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=4)
+
+    sure_val_2 = SURE_hib(1e3, sigma=1., tau=1.)
+    np.testing.assert_almost_equal(sure_val_2, 2.0, decimal=4)
+
+    sure_val_3 = SURE_hib(1e4, sigma=1., tau=1.)
+    np.testing.assert_almost_equal(sure_val_3, 2.0, decimal=4)
+
+    sure_val_4 = SURE_hib(1e20, sigma=1., tau=1.)
+    np.testing.assert_almost_equal(sure_val_4, 2.0, decimal=4)
+
+    sure_val_5 = SURE_hib(-1e20, sigma=1., tau=1.)
+    np.testing.assert_almost_equal(sure_val_5, 2.0, decimal=4)
+
+    sure_val_6 = SURE_hib(1e20, sigma=1., tau=10.5)
+    np.testing.assert_almost_equal(sure_val_6, 2.0, decimal=4)
+
+    sure_val_7 = SURE_hib(1e1, sigma=1., tau=0.5)
+    np.testing.assert_almost_equal(sure_val_7, 2.0, decimal=4)
 
 
 def _test_asymptotics():

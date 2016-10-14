@@ -71,8 +71,8 @@ def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
         tau_term = mp.ninf
 
     # TODO, FIXME: Replace with direct computation of this ratio.
-    res *= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
-    res /= horn_phi1_fn(b, 1., a + b, s, tau_term)
+    res *= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term, keep_exp_const=False)
+    res /= horn_phi1_fn(b, 1., a + b, s, tau_term, keep_exp_const=False)
 
     return res
 
@@ -149,14 +149,20 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     a_p = a + 0.5
     res = mp.rf(a_p, n) / mp.rf(a_p + b, n)
 
-    if tau > 0:
-        tau_term = 1. - tau**(-2)
+    if np.iterable(tau):
+        tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
+                                for t_ in tau), dtype=np.float)
     else:
-        tau_term = mp.ninf
+        if tau > 0:
+            tau_term = 1. - tau**(-2)
+        else:
+            tau_term = mp.ninf
 
     # TODO, FIXME: Replace with direct computation of this ratio.
-    res_phis = horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term)
-    res_phis /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
+    res_phis = horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term,
+                            keep_exp_const=False)
+    res_phis /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
+                             keep_exp_const=False)
 
     res *= res_phis
 
@@ -215,14 +221,20 @@ def E_beta(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     a_p = a + 0.5
     res = a_p / (a_p + b)
 
-    if tau > 0:
-        tau_term = 1. - tau**(-2)
+    if np.iterable(tau):
+        tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
+                                for t_ in tau), dtype=np.float)
     else:
-        tau_term = mp.ninf
+        if tau > 0:
+            tau_term = 1. - tau**(-2)
+        else:
+            tau_term = mp.ninf
 
     # TODO, FIXME: Replace with direct computation of this ratio.
-    res *= horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term)
-    res /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term)
+    res *= horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term,
+                        keep_exp_const=False)
+    res /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
+                        keep_exp_const=False)
 
     res *= y
     res = y - res
@@ -310,35 +322,4 @@ def DIC_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
     return res
 
 
-def horn_phi1_quad_single(a, b, g, x, y):
-    r""" Finite precision quadrature computation of Humbert :math:`\Phi_1`.
-
-    See Also
-    --------
-    horn_phi1_single: Series computation of Humbert :math:`\Phi_1`.
-    """
-    if not (0 < a and a < g):
-        # FIXME: Too restrictive: c-a < 0 can be non-integer.
-        raise ValueError("Parameter a must be 0 < a < g")
-
-    if y >= 1:
-        raise ValueError("Parameter y must be 0 <= y < 1")
-
-    def phi_1_integrand_num(t):
-        res_ = t**(a-1.) * (1.-t)**(g-a-1.)
-        res_ *= fp.exp(y * t) / (1.-x*t)**b
-        return res_
-
-    try:
-        res = fp.gamma(g)/fp.gamma(a)/fp.gamma(g-a)
-        res *= fp.quad(phi_1_integrand_num, [0, 1])
-
-        return res
-    except:
-        # TODO: Could check |y| >> 1 and guess at the result being inf.
-        return fp.nan
-
-
 m_hib = np.vectorize(m_hib_single)
-
-horn_phi1_quad = np.vectorize(horn_phi1_quad_single)
