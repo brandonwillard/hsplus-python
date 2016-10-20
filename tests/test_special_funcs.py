@@ -43,6 +43,9 @@ def test_vectorized(func):
 
 
 def test_sure_points():
+
+    # SURE_hib(np.array([1., 2.]), np.ones(2), np.array([1., 2.]))
+
     sure_val_1 = SURE_hib(1.53522076e+01, sigma=1., tau=1.)
     np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=4)
 

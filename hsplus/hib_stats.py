@@ -4,7 +4,7 @@ from mpmath import mp, fp
 
 from .horn_function import horn_phi1, mp_ctx
 
-## XXX: What mpmath defaults do we want?  Just making it low for speed?
+# XXX: What mpmath defaults do we want?  Just making it low for speed?
 mp_ctx.dps = 5
 
 
@@ -272,10 +272,10 @@ def SURE_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
     res = 2 * sigma**2
     E_1 = E_kappa(y, sigma, tau, a, b, s, n=1)
     y_d_2 = (y * d)**2
-    res -= y_d_2 * E_1**2
+    res = res - y_d_2 * E_1**2
     E_2 = E_kappa(y, sigma, tau, a, b, s, n=2)
     res2 = -sigma**2 * E_1 + y_d_2 * E_2
-    res += 2 * res2
+    res = res + 2 * res2
     return res
 
 
@@ -312,16 +312,7 @@ def DIC_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
     ndarray (float)
 
     """
-
-    #E_1 = np.fromiter((float(v_)
-    #                   for v_ in E_kappa(y, sigma, tau, a, b, s, n=1)),
-    #                  dtype=np.float)
-    #E_2 = np.fromiter((float(v_)
-    #                   for v_ in E_kappa(y, sigma, tau, a, b, s, n=2)),
-    #                  dtype=np.float)
     E_1 = E_kappa(y, sigma, tau, a, b, s, n=1)
     E_2 = E_kappa(y, sigma, tau, a, b, s, n=2)
-
     res = 2.*(1. - E_1) + (y * d / sigma)**2 * (2. * E_2 - E_1**2)
-
     return res
