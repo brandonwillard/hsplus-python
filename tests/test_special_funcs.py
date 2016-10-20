@@ -1,7 +1,8 @@
+import pytest
 import numpy as np
 from mpmath import mp, fp
 
-from hsplus.hib_stats import SURE_hib
+from hsplus.hib_stats import SURE_hib, DIC_hib, E_kappa, m_hib
 from hsplus.horn_function import horn_phi1
 
 
@@ -24,94 +25,32 @@ def test_horn_phi1():
                        float(horn_phi1_bad(0.5, 1, 1, 0, 0)))
 
 
+@pytest.mark.parametrize("func", [SURE_hib, DIC_hib, E_kappa, m_hib])
+def test_vectorized(func):
+
+    val_1 = func(1., sigma=1., tau=1.)
+    assert np.shape(val_1) == ()
+
+    val_2 = func(np.array([1., 1.]), sigma=1., tau=1.)
+    assert np.shape(val_2) == (2,)
+
+    np.testing.assert_array_equal(val_1, val_2)
+
+    val_3 = func(np.array([1., 1.]), sigma=1., tau=np.array([0.1, 1.]))
+    assert np.shape(val_3) == (2,)
+
+    assert val_3[0] != val_2[0] and val_3[1] == val_2[0]
+
+
 def test_sure_points():
-    alpha_d_val_1 = 1.53522076e+01
-    sure_val_1 = SURE_hib(alpha_d_val_1, sigma=1., tau=1.)
+    sure_val_1 = SURE_hib(1.53522076e+01, sigma=1., tau=1.)
     np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=4)
 
-    sure_val_2 = SURE_hib(1e3, sigma=1., tau=1.)
-    np.testing.assert_almost_equal(sure_val_2, 2.0, decimal=4)
-
-    sure_val_3 = SURE_hib(1e4, sigma=1., tau=1.)
-    np.testing.assert_almost_equal(sure_val_3, 2.0, decimal=4)
-
-    sure_val_4 = SURE_hib(1e20, sigma=1., tau=1.)
-    np.testing.assert_almost_equal(sure_val_4, 2.0, decimal=4)
-
-    sure_val_5 = SURE_hib(-1e20, sigma=1., tau=1.)
-    np.testing.assert_almost_equal(sure_val_5, 2.0, decimal=4)
-
-    sure_val_6 = SURE_hib(1e20, sigma=1., tau=10.5)
+    sure_val_6 = SURE_hib(np.array([1e3, 1e4, -1e20, 1e20]),
+                          sigma=1.,
+                          tau=np.array([1., 1., 1., 10.5]))
     np.testing.assert_almost_equal(sure_val_6, 2.0, decimal=4)
 
-    sure_val_7 = SURE_hib(1e1, sigma=1., tau=0.5)
-    np.testing.assert_almost_equal(sure_val_7, 2.0, decimal=4)
-
-
-def _test_asymptotics():
-    """ The ratios of marginal posteriors and their derivatives,
-    .. math:
-        \frac{m^\prime(y)}{m(y)} \;,
-
-    (e.g. SURE) given by
-
-    .. math:
-        m(y) \propto \Phi_1(b, 1, a^\prime + b; s^\prime, 1 - \tau^{-2})
-        \\
-        \frac{d m}{dy}(y) \equiv m^\prime(y) \propto
-        \Phi_1(b, 1, a^\prime + b + 1; s^\prime, 1 - \tau^{-2})
-        \;,
-
-    for :math:`s^\prime = s + y^2/(2 \sigma^2)` and
-    :math:`a^\prime = a + 1/2`, are sensitive to large :math:`y`.
-    Sometimes these ratios converge, so we need to a stable, fast numeric
-    approach that also converges.
-
-    .. note:
-        :math:`a = b = 1/2, s = 0` for the Horseshoe prior.
-
-    """
-    # CCH/m(y) params:
-    mp.dps = 15
-    z_1, z_2 = 421.25, 0.
-    #z_1, z_2 = 10., 0.
-
-    (horn_phi1_naive(1/2., 1., 3/2., z_1, z_2) /
-     horn_phi1_naive(1/2., 1., 1., z_1, z_2))
-    # mpf('0.16716563382409313')
-
-    (horn_phi1_naive(1/2., 1., 3/2., z_1, z_2) /
-     horn_phi1_naive(1/2., 1., 3/2, z_1, z_2))
-
-    # Denominator of derivative term
-    mp.appellf1(alpha, beta_, 1., gamma_d1, z_1, z_2)
-
-    # m(y) calc has this ratio:
-    mp.appellf1(alpha, beta_, 1., gamma_, z_1, z_2)
-    mp.appellf1(alpha, beta_, 1., gamma_denom, z_1_denom, z_2)
-
-    # Here's an F1 expansion around z_1 -> inf
-    mp.appellf1(alpha, beta_, 1., gamma_, z_1, z_2)
-
-    def F1_z1_inf(alpha, beta_1, beta_2, gamma_, z_1, z_2):
-        res_1 = mp.gamma(gamma_) * mp.gamma(beta_1 - alpha)
-        res_1 /= mp.gamma(gamma_ - alpha) * mp.gamma(beta_1)
-        res_1 *= (-z_1)**(-alpha)
-        res_1 *= mp.appellf1(alpha, alpha - gamma_ + 1,
-                             beta_2, alpha - beta_1 + 1,
-                             1./z_1, z_2/z_1)
-        res_2 = mp.gamma(gamma_) / mp.gamma(alpha)
-        res_2 *= (-z_1)**(-beta_1)
-        res_2 *= mp.nsum(lambda k:
-                         mp.gamma(alpha + k - beta_1) * mp.rf(beta_2, k) /
-                         (mp.gamma(gamma_ + k - beta_1) * mp.fac(k)) *
-                         mp.hyp2f1(beta_1,
-                                   beta_1 - gamma_ - k + 1,
-                                   beta_1 - alpha - k + 1,
-                                   1./z_1) *
-                         z_2**k, [0, mp.inf])
-
-        return res_1 + res_2
-
-    mp.appellf1(alpha, beta, 1., gamma_, z_1, z_2)
-    F1_z1_inf(alpha, beta, 1., gamma_, z_1, z_2)
+    sure_val_7 = SURE_hib(np.array([1e2, 1e3]), sigma=1., tau=0.5)
+    np.testing.assert_almost_equal(sure_val_7[0], 2.0, decimal=2)
+    np.testing.assert_almost_equal(sure_val_7[1], 2.0, decimal=3)

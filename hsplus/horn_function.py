@@ -7,7 +7,7 @@ from sympy.core.function import Function, ArgumentIndexError
 from sympy.core.containers import Tuple
 from sympy.core.symbol import Dummy
 from sympy.functions.special.hyper import TupleParametersBase, _prep_tuple
-
+from sympy import cacheit
 
 mp_ctx = mp
 
@@ -265,6 +265,12 @@ class HornPhi1(TupleParametersBase):
 
         return Function.__new__(cls, _prep_tuple(ap), _prep_tuple(bq), x, y)
 
+    def equals(self, other, failing_expression=False):
+        #return super(HornPhi1, self).equals(other, failing_expression)
+        sum_form = self._eval_rewrite_as_Sum(*self.args)
+        res = sum_form.equals(other, failing_expression=failing_expression)
+        return res
+
     def _eval_expand_func(self, **hints):
         pass
 
@@ -317,21 +323,36 @@ class HornPhi1(TupleParametersBase):
         a, b = ap
         g, = bq
         with mp.workprec(prec):
-            v = horn_phi1_gordy_single(a, b, g, x, y)
+            try:
+                v = horn_phi1_gordy_single(a, b, g, x, y)
+            except ValueError:
+                # FIXME: This isn't really correct; could be mp.inf or mp.ninf.
+                v = mp.nan
 
         return Expr._from_mpmath(v, prec)
 
     def fdiff(self, argindex=3):
+        r""" TODO: No order of differentiation?
+        """
         import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
 
-        if argindex != 3:
+        if argindex not in (3, 4):
             raise ArgumentIndexError(self, argindex)
 
         nap = Tuple(*[a + 1 for a in self.ap])
         nbq = Tuple(*[b + 1 for b in self.bq])
-        fac = sp.Mul(*self.ap)/sp.Mul(*self.bq)
-        return fac*sp.hyper(nap, nbq, self.argument)
 
+        if argindex is 3:
+            fac = sp.Mul([sp.RisingFactorial(a_) for a_ in self.ap],
+                         [1/sp.RisingFactorial(b_) for b_ in self.bq])
+        else:
+            raise NotImplementedError("")
+            #fac = sp.Mul([sp.RisingFactorial(a_) for a_ in *self.ap],
+            #             [1/sp.RisingFactorial(b_) for b_ in *self.bq])
+
+        return fac * HornPhi1(*((nap, nbq) + self.argument))
+
+    @cacheit
     def summand(self, m, n):
         r""" Returns the summand that defines this confluent hypergeometric series.
 
@@ -342,13 +363,17 @@ class HornPhi1(TupleParametersBase):
         with the :math:`x` term, and *not* the :math:`y` term--as alphabetical
         order (and reason) would have it.
         """
-        from sympy import RisingFactorial, factorial
-        return RisingFactorial(self.ap[0], m+n) \
-            * RisingFactorial(self.ap[1], m) \
-            / RisingFactorial(self.bq[0], m+n) \
-            / factorial(m) \
-            / factorial(n)
+        from sympy import RisingFactorial, factorial, Mul
 
+        res = Mul(RisingFactorial(self.ap[0], m+n),
+                  RisingFactorial(self.ap[1], m),
+                  1/RisingFactorial(self.bq[0], m+n),
+                  1/factorial(m), 1/factorial(n),
+                  evaluate=False)
+
+        return res
+
+    @cacheit
     def _eval_rewrite_as_Sum(self, ap, bq, x, y):
         from sympy.functions import Piecewise
         from sympy import Sum, oo
@@ -358,6 +383,7 @@ class HornPhi1(TupleParametersBase):
                               (m, 0, oo), (n, 0, oo)),
                           self.convergence_statement), (self, True))
 
+    @cacheit
     def _eval_rewrite_as_Integral(self, ap, bq, x, y):
         r""" One integral form for a :math:`\Phi_1` function.
         This is better put in a matching library, among the other
@@ -370,14 +396,15 @@ class HornPhi1(TupleParametersBase):
         lam = Dummy('lambda', real=True, nonnegative=True)
         res = gamma(g) / gamma(a) / gamma(g - a)
         integrand = sp.Mul(lam**(a-1), (1 - lam)**(g - a - 1),
-                           (1 - x * lam)**(-b), sp.exp(y * lam))
+                           (1 - x * lam)**(-b), sp.exp(y * lam),
+                           evaluate=False)
         res *= sp.Integral(integrand, (lam, 0, 1))
         return res
 
     @property
     def argument(self):
         """ Arguments of the Horn Phi1 function. """
-        return (self.args[2], self.args[3])
+        return Tuple(*self.args[2:])
 
     @property
     def ap(self):
@@ -390,8 +417,15 @@ class HornPhi1(TupleParametersBase):
         return Tuple(*self.args[1])
 
     @property
+    def eta(self):
+        """ A quantity related to the convergence of the series. """
+        return sum(self.ap) - sum(self.bq)
+
+    @property
     def radius_of_convergence(self):
         """
+        XXX: Need to check that this still holds for the bivariate case!
+
         From `sympy.functions.hyper`:
 
         Compute the radius of convergence of the defining series.
@@ -436,7 +470,11 @@ class HornPhi1(TupleParametersBase):
 
     @property
     def convergence_statement(self):
-        """ Return a condition on z under which the series converges. """
+        r"""
+        XXX: Need to check that this still holds for the bivariate case!
+
+        Return a condition on z under which the series converges.
+        """
         from sympy import And, Or, re, Ne, oo
         R = self.radius_of_convergence
         if R == 0:
@@ -445,18 +483,24 @@ class HornPhi1(TupleParametersBase):
             return True
         # The special functions and their approximations, page 44
         e = self.eta
-        z = self.argument
-        c1 = And(re(e) < 0, abs(z) <= 1)
-        c2 = And(0 <= re(e), re(e) < 1, abs(z) <= 1, Ne(z, 1))
-        c3 = And(re(e) >= 1, abs(z) < 1)
-        return Or(c1, c2, c3)
+        z_1, z_2 = self.argument
+
+        def param_convergence_conditions(z):
+            c1 = And(re(e) < 0, abs(z) <= 1)
+            c2 = And(0 <= re(e), re(e) < 1, abs(z) <= 1, Ne(z, 1))
+            c3 = And(re(e) >= 1, abs(z) < 1)
+            return Or(c1, c2, c3)
+
+        return And(param_convergence_conditions(z_1),
+                   param_convergence_conditions(z_2))
 
     def _latex(self, printer, exp=None):
         if len(self.args) != 4:
             raise ValueError("Args length should be 1")
         return (r'\operatorname{{\Phi_1}}'
-                r'{{\left({}, {}; {}, {} \right)}}').format(
-                    printer._print(*self.args))
+                r'{{\left({}, {}, {}; {}, {} \right)}}').format(
+                    *[printer._print(a_)
+                      for a_ in sp.flatten(self.args)])
 
 
 def phi1_int_match(expr):

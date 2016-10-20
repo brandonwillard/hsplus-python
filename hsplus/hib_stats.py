@@ -2,10 +2,10 @@
 import numpy as np
 from mpmath import mp, fp
 
-from .horn_function import horn_phi1
+from .horn_function import horn_phi1, mp_ctx
 
-# XXX: What mpmath defaults do we want?  Just making it low for speed?
-mp.dps = 5
+## XXX: What mpmath defaults do we want?  Just making it low for speed?
+mp_ctx.dps = 5
 
 
 def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
@@ -63,7 +63,7 @@ def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
     a_p = a + 0.5
     C = 1. / np.sqrt(2. * np.pi) / sigma
     res = C * np.exp(-y_2_sig)
-    res *= mp.beta(a_p, b) / mp.beta(a, b)
+    res *= mp_ctx.beta(a_p, b) / mp_ctx.beta(a, b)
 
     if tau > 0:
         tau_term = 1. - tau**(-2)
@@ -75,6 +75,9 @@ def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
     res /= horn_phi1_fn(b, 1., a + b, s, tau_term, keep_exp_const=False)
 
     return res
+
+
+m_hib = np.vectorize(m_hib_single)
 
 
 def m_hs(y, sigma=1., tau=1.):
@@ -147,7 +150,7 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     """
     s_p = s + 0.5 * np.square(y / sigma)
     a_p = a + 0.5
-    res = mp.rf(a_p, n) / mp.rf(a_p + b, n)
+    res = mp_ctx.rf(a_p, n) / mp_ctx.rf(a_p + b, n)
 
     if np.iterable(tau):
         tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
@@ -268,8 +271,8 @@ def SURE_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
     """
     res = 2 * sigma**2
     E_1 = E_kappa(y, sigma, tau, a, b, s, n=1)
-    y_d_2 = np.square(y * d)
-    res -= y_d_2 * np.square(E_1)
+    y_d_2 = (y * d)**2
+    res -= y_d_2 * E_1**2
     E_2 = E_kappa(y, sigma, tau, a, b, s, n=2)
     res2 = -sigma**2 * E_1 + y_d_2 * E_2
     res += 2 * res2
@@ -310,16 +313,15 @@ def DIC_hib(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., d=1.):
 
     """
 
-    E_1 = np.fromiter((float(v_)
-                       for v_ in E_kappa(y, sigma, tau, a, b, s, n=1)),
-                      dtype=np.float)
-    E_2 = np.fromiter((float(v_)
-                       for v_ in E_kappa(y, sigma, tau, a, b, s, n=2)),
-                      dtype=np.float)
+    #E_1 = np.fromiter((float(v_)
+    #                   for v_ in E_kappa(y, sigma, tau, a, b, s, n=1)),
+    #                  dtype=np.float)
+    #E_2 = np.fromiter((float(v_)
+    #                   for v_ in E_kappa(y, sigma, tau, a, b, s, n=2)),
+    #                  dtype=np.float)
+    E_1 = E_kappa(y, sigma, tau, a, b, s, n=1)
+    E_2 = E_kappa(y, sigma, tau, a, b, s, n=2)
 
     res = 2.*(1. - E_1) + (y * d / sigma)**2 * (2. * E_2 - E_1**2)
 
     return res
-
-
-m_hib = np.vectorize(m_hib_single)

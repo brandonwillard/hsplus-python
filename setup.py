@@ -16,6 +16,8 @@ setup(name='hsplus',
       ],
       keywords='mpmath, sympy, bayes, horseshoe prior',
       packages=find_packages(),
+      setup_requires=['pytest-runner', ],
+      tests_requires=['pytest', ],
       install_requires=[
                         'numpy>=1.10.4',
                         'mpmath>=0.19',
