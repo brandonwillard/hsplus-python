@@ -3,7 +3,6 @@ import sympy as sp
 import numpy as np
 from mpmath import mp, fp
 
-from sympy.core.function import Function, ArgumentIndexError
 from sympy.core.containers import Tuple
 from sympy.core.symbol import Dummy
 from sympy.functions.special.hyper import TupleParametersBase, _prep_tuple
@@ -259,20 +258,75 @@ class HornPhi1(TupleParametersBase):
     .. [Humbert series] http://en.wikipedia.org/wiki/Humbert_series
     """
 
-    def __new__(cls, ap, bq, x, y):
+    def __new__(cls, *args, **kwargs):
+
+        try:
+            if len(args) == 4:
+                ap, bq, x, y = args
+                ap = _prep_tuple(ap)
+                bq = _prep_tuple(bq)
+                a, b = ap
+                q, = bq
+            elif len(args) == 5:
+                a, b, q, x, y = args
+        except:
+            raise ValueError(("HornPhi1 takes (a,b,g,x,y) or ((a,b),(g,),x,y) "
+                              "non-keyword arguments only"))
+
         # TODO: Convert negative a, b and negative non-integer g indices.
         #if any(sp.ask(sp.Q.integer(t_) & sp.Q.negative) for t_ in ap[0:2])
 
-        return Function.__new__(cls, _prep_tuple(ap), _prep_tuple(bq), x, y)
+        return super(HornPhi1, cls).__new__(cls, a, b, q, x, y)
 
     def equals(self, other, failing_expression=False):
-        #return super(HornPhi1, self).equals(other, failing_expression)
-        sum_form = self._eval_rewrite_as_Sum(*self.args)
-        res = sum_form.equals(other, failing_expression=failing_expression)
+        r""" Compare Sum forms.
+
+        """
+        res = (self == other)
+
+        if res is True:
+            return True
+
+        this_sum_form = self._eval_rewrite_as_Sum(*self.args)
+
+        if isinstance(other, HornPhi1):
+
+            other_sum_form = other.rewrite(sp.Sum)
+            res = this_sum_form.equals(other_sum_form,
+                                       failing_expression=failing_expression)
+
+        elif isinstance(other, sp.Piecewise):
+
+            res = this_sum_form.equals(other,
+                                       failing_expression=failing_expression)
+
+        elif isinstance(other, sp.Mul) and other.has(sp.Integral):
+
+            this_int_form = self._eval_rewrite_as_Integral(*self.args)
+            res = this_int_form.equals(other,
+                                       failing_expression=failing_expression)
+
+        else:
+            res = super(HornPhi1, self).equals(other, failing_expression)
+
         return res
 
     def _eval_expand_func(self, **hints):
-        pass
+        r"""
+        Is this also the route by which we provide the recursion relations?
+        If so, we'll have to make extensive use of the hints to determine
+        exactly which recurrence relation to use.
+
+        .. todo:
+            Implement standard reductions, e.g. limits of [F1_values]_ and
+            [F1_idents]_.
+
+        .. [F1_values] http://functions.wolfram.com/HypergeometricFunctions/AppellF1/03/ShowAll.html
+        .. [F1_idents] http://functions.wolfram.com/HypergeometricFunctions/AppellF1/17/ShowAll.html
+        """
+        #res = super(HornPhi1, self)._eval_expand_func(**hints)
+        res = self
+        return res
 
     def _polarify(self, num):
         r""" Is this really the same as sympy.polarify?
@@ -305,7 +359,7 @@ class HornPhi1(TupleParametersBase):
             G(z'**(1/r)) = G(z'**n) = G(z).
         """
         from sympy import Expr
-        import mpmath as mp
+        from mpmath import mp
 
         # Numerically evaluate arguments
         #args_num = [a_._eval_evalf(prec) for a_ in self.argument]
@@ -316,7 +370,7 @@ class HornPhi1(TupleParametersBase):
         try:
             [x, y, xr, yr, ap, bq] = [arg._to_mpmath(prec)
                                       for arg in [xnum, ynum, 1/xn, 1/yn,
-                                                  self.args[0], self.args[1]]]
+                                                  self.ap, self.bq]]
         except ValueError:
             return
 
@@ -332,23 +386,26 @@ class HornPhi1(TupleParametersBase):
         return Expr._from_mpmath(v, prec)
 
     def fdiff(self, argindex=3):
-        r""" TODO: No order of differentiation?
+        r"""
+        .. todo:
+            No order of differentiation?  Those formulas should be implemented
+            somewhere.
         """
-        import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
 
         if argindex not in (3, 4):
-            raise ArgumentIndexError(self, argindex)
+            raise NotImplementedError()
 
+        # TODO: n-th derivative is just `a/b + n`.
         nap = Tuple(*[a + 1 for a in self.ap])
         nbq = Tuple(*[b + 1 for b in self.bq])
 
         if argindex is 3:
-            fac = sp.Mul([sp.RisingFactorial(a_) for a_ in self.ap],
-                         [1/sp.RisingFactorial(b_) for b_ in self.bq])
+            # TODO: n-th derivative
+            #fac = sp.Mul([sp.RisingFactorial(a_, n) for a_ in self.ap],
+            #             [1/sp.RisingFactorial(b_, n) for b_ in self.bq])
+            fac = sp.Mul(self.ap[0], self.ap[1], 1/self.bq[0])
         else:
-            raise NotImplementedError("")
-            #fac = sp.Mul([sp.RisingFactorial(a_) for a_ in *self.ap],
-            #             [1/sp.RisingFactorial(b_) for b_ in *self.bq])
+            raise NotImplementedError()
 
         return fac * HornPhi1(*((nap, nbq) + self.argument))
 
@@ -375,6 +432,14 @@ class HornPhi1(TupleParametersBase):
 
     @cacheit
     def _eval_rewrite_as_Sum(self, ap, bq, x, y):
+        r""" Expand to double sum form.
+
+        .. todo:
+            Could also expand to specialized series forms, e.g. limits of
+            [F1_series]_.
+
+        .. [F1_series] http://functions.wolfram.com/HypergeometricFunctions/AppellF1/06/ShowAll.html
+        """
         from sympy.functions import Piecewise
         from sympy import Sum, oo
         m = Dummy("m", integer=True, nonnegative=True)
@@ -383,11 +448,25 @@ class HornPhi1(TupleParametersBase):
                               (m, 0, oo), (n, 0, oo)),
                           self.convergence_statement), (self, True))
 
+    def _eval_nseries(self, x, n, logx):
+        r"""
+        .. todo:
+            Could also use the series forms from here [F1_series]_.
+
+        .. [F1_series] http://functions.wolfram.com/HypergeometricFunctions/AppellF1/06/ShowAll.html
+        """
+        res = super(HornPhi1, self)._eval_nseries(x, n, logx)
+        return res
+
     @cacheit
     def _eval_rewrite_as_Integral(self, ap, bq, x, y):
         r""" One integral form for a :math:`\Phi_1` function.
         This is better put in a matching library, among the other
         possible integral expressions.
+
+        TODO: Can also be written as double integral and a bivariate G-function [1]_
+
+        .. [1] http://mathworld.wolfram.com/AppellHypergeometricFunction.html
         """
         from sympy import gamma
         a, b = ap
@@ -404,18 +483,21 @@ class HornPhi1(TupleParametersBase):
     @property
     def argument(self):
         """ Arguments of the Horn Phi1 function. """
-        return Tuple(*self.args[2:])
+        return Tuple(*self.args[3:])
 
     @property
     def ap(self):
         """ Numerator parameters of series rising factorial terms. """
-        return Tuple(*self.args[0])
+        return Tuple(self.args[0], self.args[1])
 
     @property
     def bq(self):
         """ Denominator parameters of series rising factorial terms. """
-        return Tuple(*self.args[1])
+        return Tuple(self.args[2])
 
+    @property
+    def _diffargs(self):
+        return self.ap + self.bq
     @property
     def eta(self):
         """ A quantity related to the convergence of the series. """
@@ -495,12 +577,18 @@ class HornPhi1(TupleParametersBase):
                    param_convergence_conditions(z_2))
 
     def _latex(self, printer, exp=None):
-        if len(self.args) != 4:
+        if len(self.args) != 5:
             raise ValueError("Args length should be 1")
         return (r'\operatorname{{\Phi_1}}'
-                r'{{\left({}, {}, {}; {}, {} \right)}}').format(
-                    *[printer._print(a_)
-                      for a_ in sp.flatten(self.args)])
+                r'{{\left({}\right)}}').format(printer._print(self.args))
+
+    def __repr__(self):
+        from sympy.printing import sstr
+        return sstr(self, order=None)
+
+    def __str__(self):
+        from sympy.printing import sstr
+        return sstr(self, order=None)
 
 
 def phi1_int_match(expr):

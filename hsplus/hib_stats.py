@@ -4,7 +4,7 @@ from mpmath import mp, fp
 
 from .horn_function import horn_phi1, mp_ctx
 
-# XXX: What mpmath defaults do we want?  Just making it low for speed?
+# XXX: Which mpmath defaults do we want?  Just making it low for speed?
 mp_ctx.dps = 5
 
 
