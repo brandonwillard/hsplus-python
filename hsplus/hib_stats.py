@@ -5,7 +5,7 @@ from mpmath import mp, fp
 from .horn_function import horn_phi1, mp_ctx
 
 # XXX: Which mpmath defaults do we want?  Just making it low for speed?
-mp_ctx.dps = 5
+#mp_ctx.dps = 5
 
 
 def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
@@ -153,10 +153,12 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     res = mp_ctx.rf(a_p, n) / mp_ctx.rf(a_p + b, n)
 
     if np.iterable(tau):
+        # XXX: mp_ctx.mpf(t_) ?
         tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
                                 for t_ in tau), dtype=np.float)
     else:
         if tau > 0:
+            # XXX: mp_ctx.mpf(t_) ?
             tau_term = 1. - tau**(-2)
         else:
             tau_term = mp.ninf
@@ -172,7 +174,7 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     return res
 
 
-def E_beta(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
+def E_beta(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
            horn_phi1_fn=horn_phi1):
     r""" Moments of the hypergeometric inverted-beta model
     in the ::math::`\beta` parameterization.
@@ -213,31 +215,13 @@ def E_beta(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
         Hypergeometric inverted-beta model parameter
     s: float
         Hypergeometric inverted-beta model parameter
-    n: int
-        Order of the moment.
 
     Results
     =======
     ndarray of mpmath.mpf
     """
-    s_p = s + 0.5 * np.square(y / sigma)
-    a_p = a + 0.5
-    res = a_p / (a_p + b)
-
-    if np.iterable(tau):
-        tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
-                                for t_ in tau), dtype=np.float)
-    else:
-        if tau > 0:
-            tau_term = 1. - tau**(-2)
-        else:
-            tau_term = mp.ninf
-
-    # TODO, FIXME: Replace with direct computation of this ratio.
-    res *= horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term,
-                        keep_exp_const=False)
-    res /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
-                        keep_exp_const=False)
+    res = E_kappa(y, sigma, tau, a, b, s, n=1,
+                  horn_phi1_fn=horn_phi1)
 
     res *= y
     res = y - res

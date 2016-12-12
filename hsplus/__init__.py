@@ -8,7 +8,7 @@ HS+ prior.
 """
 from __future__ import division, absolute_import, print_function
 
-VERSION = (0, 0, 1)
+VERSION = (0, 0, 2)
 
 
 def get_version():
