@@ -2,10 +2,7 @@
 import numpy as np
 from mpmath import mp, fp
 
-from .horn_function import horn_phi1, mp_ctx
-
-# XXX: Which mpmath defaults do we want?  Just making it low for speed?
-#mp_ctx.dps = 5
+from .horn_numeric import horn_phi1, mp_ctx
 
 
 def m_hib_single(y, sigma=1., tau=1., a=0.5, b=0.5, s=0.,
