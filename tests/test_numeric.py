@@ -3,7 +3,7 @@ import numpy as np
 from mpmath import mp, fp
 
 from hsplus.hib_stats import SURE_hib, DIC_hib, E_kappa, m_hib
-from hsplus.horn_function import horn_phi1
+from hsplus.horn_numeric import horn_phi1
 
 
 def horn_phi1_bad(a, b, g, x, y):
@@ -40,6 +40,17 @@ def test_vectorized(func):
     assert np.shape(val_3) == (2,)
 
     assert val_3[0] != val_2[0] and val_3[1] == val_2[0]
+
+
+def test_horn_y_singular():
+    r""" Test the singular points in ::math::`y`, i.e.
+    ::math::`y = 1` across ::math::`x`.
+    """
+    phi_args = [1.0, 1, 1.5]
+    xys = [[0.5, 1], [0, 1], [10, 1], [-10, 1]]
+
+    for xy in xys:
+        assert horn_phi1(*(phi_args + xy)) == mp.inf
 
 
 def test_sure_points():

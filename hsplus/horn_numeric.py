@@ -123,7 +123,7 @@ def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
     if not (0 <= a and a < g):
         raise ValueError("Parameter a must be 0 < a < g")
 
-    if y >= 1:
+    if y > 1:
         # TODO: We could use
         #   hyp2f1(a, b, g, 1) =
         #     gamma(g) gamma(g-a-b) /gamma(g-a) / gamma(g-b)
@@ -137,9 +137,8 @@ def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
         # res *= mp_ctx.hyp1f1(a, g-b, x)
         raise ValueError("Parameter y must be 0 <= y < 1")
 
-    if (0 <= y and y < 1):
-        #if mp_ctx.chop(y) == 0:
-        #    res = mp_ctx.hyp2f1(a, 1, g, x)
+    if (0 <= y and y <= 1):
+
         phi_args = (a, b, g, x, y)
         if x < 0:
             if x > -1:
@@ -188,8 +187,14 @@ def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
                         res = mp_ctx.nsum(lambda n: phi1_T3_y(n, *phi_args),
                                           [0, mp_ctx.inf])
                 else:
-                    res = mp_ctx.nsum(lambda n: phi1_T1_x(n, *phi_args),
-                                      [0, mp_ctx.inf])
+                    if x < 0.5:
+                        res = mp_ctx.nsum(lambda n: phi1_T2_x(n, *phi_args),
+                                          [0, mp_ctx.inf])
+                        if keep_exp_const:
+                            res *= mp_ctx.exp(x)
+                    else:
+                        res = mp_ctx.nsum(lambda n: phi1_T1_x(n, *phi_args),
+                                          [0, mp_ctx.inf])
     elif mp.isfinite(y):
         res = horn_phi1_gordy_single(g - a, b, g, -x, y / (y - 1.),
                                      keep_exp_const=keep_exp_const)

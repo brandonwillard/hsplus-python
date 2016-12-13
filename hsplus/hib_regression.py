@@ -16,6 +16,7 @@ class HIB_fit(object):
 
     .. _patsy: https://patsy.readthedocs.io/en/latest/library-developers.html
     """
+
     def __init__(self, formula_like, data={}, tau=None, sigma=1,
                  a=0.5, b=0.5, s=0., tau_method="SURE"):
         r""" Linear regresion with an HIB regression parameter global-local shrinkage
@@ -63,8 +64,8 @@ class HIB_fit(object):
         self.a = a
         self.b = b
         self.s = s
-        self.tau0 = tau
-        self.sigma = sigma
+        self.tau0 = np.atleast_1d(tau)
+        self.sigma = np.atleast_1d(sigma)
         self.tau_method = tau_method
 
         y, X = dmatrices(formula_like, data, 1)
@@ -100,22 +101,31 @@ class HIB_fit(object):
         )
         return (tau_opt_res.x, None)
 
+    opt_method_dict = {"SURE": (tau_opt_SURE, SURE_hib)}
+
     def find_tau(self, alpha_hat, d_X):
 
+        opt_methods = self.opt_method_dict.get(
+            self.tau_method.upper(), None)
+
+        if opt_methods is None:
+            from warnings import warn
+            warn(("tau_method does not match a valid method. "
+                  "Using SURE"))
+            opt_methods = self.opt_method_dict['SURE']
+
         if self.tau0 is None:
-            if self.tau_method.upper() == "SURE":
-                res = self.tau_opt_SURE(alpha_hat, d_X)
-            else:
-                from warnings import warn
-                warn(("tau_method does not match a valid method. "
-                     "Using SURE"))
-                res = self.tau_opt_SURE(alpha_hat, d_X)
+            res = opt_methods[0](alpha_hat, d_X)
         else:
-            obj_vals = SURE_hib(alpha_hat * d_X,
-                                self.sigma,
-                                self.tau0 * d_X,
-                                self.a, self.b, self.s)
+            obj_vals = np.sum(opt_methods[1](
+                alpha_hat * d_X,
+                self.sigma,
+                self.tau0 * d_X,
+                self.a, self.b, self.s))
+
+            obj_vals = np.atleast_1d(obj_vals)
             arg_min = np.argmin(obj_vals)
+
             res = (self.tau0[arg_min], obj_vals[arg_min])
 
         return res
