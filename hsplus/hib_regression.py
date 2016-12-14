@@ -100,8 +100,8 @@ class HIB_fit(object):
                               t_ * d_X,
                               self.a, self.b, self.s)),
             1,
-            method='SLSQP',
-            bounds=((1e-7, None),),
+            method='L-BFGS-B',
+            bounds=((2 * np.finfo(np.float).eps, None),),
             options={'disp': True}
         )
         return (tau_opt_res.x, None)
