@@ -150,23 +150,30 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     res = mp_ctx.rf(a_p, n) / mp_ctx.rf(a_p + b, n)
 
     if np.iterable(tau):
-        # XXX: mp_ctx.mpf(t_) ?
+        # TODO: mp_ctx.mpf(t_) ?
         tau_term = np.fromiter((1. - t_**(-2) if t_ > 0 else mp.ninf
                                 for t_ in tau), dtype=np.float)
     else:
         if tau > 0:
-            # XXX: mp_ctx.mpf(t_) ?
+            # TODO: mp_ctx.mpf(t_) ?
             tau_term = 1. - tau**(-2)
         else:
             tau_term = mp.ninf
 
-    # TODO, FIXME: Replace with direct computation of this ratio.
-    res_phis = horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term,
-                            keep_exp_const=False)
-    res_phis /= horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
+    # TODO: Replace with direct computation of this ratio.
+    res_num = horn_phi1_fn(b, 1., a_p + b + n, s_p, tau_term,
+                           keep_exp_const=False)
+    res_denom = horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
                              keep_exp_const=False)
 
-    res *= res_phis
+    # XXX FIXME: A hack, but not completely without sense.  The numerator
+    # should diverge slower than the denominator.  We'll keep the
+    # division so that a warning is emitted, but this needs to be
+    # handled properly.
+    res_ratio = res_num/res_denom
+    res_ratio[np.isinf(res_num)] = 1
+
+    res *= res_ratio
 
     return res
 

@@ -64,9 +64,14 @@ class HIB_fit(object):
         self.a = a
         self.b = b
         self.s = s
-        self.tau0 = np.atleast_1d(tau)
+        if tau is None:
+            self.tau0 = tau
+        else:
+            self.tau0 = np.atleast_1d(tau)
         self.sigma = np.atleast_1d(sigma)
+
         self.tau_method = tau_method
+        self.opt_method_dict = {"SURE": (self.tau_opt_SURE, SURE_hib)}
 
         y, X = dmatrices(formula_like, data, 1)
         self.nobs = X.shape[0]
@@ -101,8 +106,6 @@ class HIB_fit(object):
         )
         return (tau_opt_res.x, None)
 
-    opt_method_dict = {"SURE": (tau_opt_SURE, SURE_hib)}
-
     def find_tau(self, alpha_hat, d_X):
 
         opt_methods = self.opt_method_dict.get(
@@ -117,11 +120,11 @@ class HIB_fit(object):
         if self.tau0 is None:
             res = opt_methods[0](alpha_hat, d_X)
         else:
-            obj_vals = np.sum(opt_methods[1](
-                alpha_hat * d_X,
-                self.sigma,
-                self.tau0 * d_X,
-                self.a, self.b, self.s))
+            obj_vals = [np.sum(opt_methods[1](alpha_hat * d_X,
+                                              self.sigma,
+                                              t_ * d_X,
+                                              self.a, self.b, self.s))
+                        for t_ in self.tau0]
 
             obj_vals = np.atleast_1d(obj_vals)
             arg_min = np.argmin(obj_vals)

@@ -2,8 +2,14 @@ import pytest
 import numpy as np
 from mpmath import mp, fp
 
-from hsplus.hib_stats import SURE_hib, DIC_hib, E_kappa, m_hib
-from hsplus.horn_numeric import horn_phi1
+from hsplus.hib_stats import (SURE_hib, DIC_hib, E_kappa, m_hib)
+import hsplus.horn_numeric
+from hsplus.horn_numeric import (
+    horn_phi1,
+    phi1_T1_x,
+    phi1_T2_x,
+    phi1_T3_y,
+    phi1_T4_y)
 
 
 def horn_phi1_bad(a, b, g, x, y):
@@ -42,16 +48,37 @@ def test_vectorized(func):
     assert val_3[0] != val_2[0] and val_3[1] == val_2[0]
 
 
-def test_horn_y_singular():
-    r""" Test the singular points in ::math::`y`, i.e.
-    ::math::`y = 1` across ::math::`x`.
+@pytest.mark.parametrize("mp_test_ctx", [mp, fp])
+def test_horn_y_singular(mp_test_ctx):
+    r""" Test singular points.
     """
+    hsplus.horn_numeric.mp_ctx = mp_test_ctx
+
     phi_args = [1.0, 1, 1.5]
     xys = [[0.5, 1], [0, 1], [10, 1], [-10, 1]]
 
     for xy in xys:
-        assert horn_phi1(*(phi_args + xy)) == mp.inf
+        assert horn_phi1(*(phi_args + xy)) == mp_test_ctx.inf
 
+    # hsplus.horn_numeric.mp_ctx = fp
+    # hsplus.horn_numeric.mp_ctx = mp
+
+    # phi_args = (2.0, 1, 2.5, -1e10, 1)
+
+    # horn_phi1(*phi_args)
+    # # %timeit horn_phi1(*phi_args)
+
+    # mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
+    # # %timeit mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
+
+    # mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T2_x(n, *phi_args), [0, mp.inf])
+    # # %timeit mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T2_x(n, *phi_args), [0, mp.inf])
+
+    # mp.nsum(lambda n: phi1_T3_y(n, *phi_args), [0, mp.inf])
+    # # %timeit mp.nsum(lambda n: phi1_T3_y(n, *phi_args), [0, mp.inf])
+
+    # mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T4_y(n, *phi_args), [0, mp.inf])
+    # # %timeit mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T4_y(n, *phi_args), [0, mp.inf])
 
 def test_sure_points():
 

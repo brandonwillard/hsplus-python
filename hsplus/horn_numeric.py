@@ -2,7 +2,7 @@
 import numpy as np
 from mpmath import mp, fp
 
-mp_ctx = mp
+mp_ctx = fp
 
 
 def phi1_T1_x(m, a_, b_, g_, x_, y_):
@@ -74,7 +74,9 @@ def phi1_T4_y(n, a_, b_, g_, x_, y_):
     return res
 
 
-def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
+def horn_phi1_gordy_single(a, b, g, x, y,
+                           keep_exp_const=True,
+                           **kwargs):
     r""" Infinite precision computation of the Horn :math:`Phi_1` function.
     Uses the approach of [Gordy]_.
 
@@ -124,33 +126,18 @@ def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
         raise ValueError("Parameter a must be 0 < a < g")
 
     if y > 1:
-        # TODO: We could use
-        #   hyp2f1(a, b, g, 1) =
-        #     gamma(g) gamma(g-a-b) /gamma(g-a) / gamma(g-b)
-        # for g-a-b > 0, so
-        #   hyp2f1(b, a+m, g+m, 1) =
-        #     gamma(g+m) gamma(g-b-a) /gamma(g+m-b) / gamma(g-a)
-        # in phi1_T1_x and phi1_T2_x.
-        # The whole result is
-        # res = mp_ctx.gamma(g) * mp_ctx.gamma(g-a-b)
-        # res /= mp_ctx.gamma(g-a) * mp_ctx.gamma(g-b)
-        # res *= mp_ctx.hyp1f1(a, g-b, x)
         raise ValueError("Parameter y must be 0 <= y < 1")
+    elif y == 1:
+        return mp_ctx.inf
 
-    if (0 <= y and y <= 1):
+    if (0 <= y and y < 1):
 
         phi_args = (a, b, g, x, y)
         if x < 0:
             if x > -1:
                 # -1 < x < 0
-
-                # Only the second properly diverges at y ~ 1.
-                if y < 0.9:
-                    res = mp_ctx.nsum(lambda n: phi1_T4_y(n, *phi_args),
-                                      [0, mp_ctx.inf])
-                else:
-                    res = mp_ctx.nsum(lambda n: phi1_T2_x(n, *phi_args),
-                                      [0, mp_ctx.inf])
+                res = mp_ctx.nsum(lambda n: phi1_T2_x(n, *phi_args),
+                                  [0, mp_ctx.inf])
                 if keep_exp_const:
                     res *= mp_ctx.exp(x)
             else:
@@ -159,9 +146,6 @@ def horn_phi1_gordy_single(a, b, g, x, y, keep_exp_const=True, **kwargs):
                     res = mp_ctx.nsum(lambda n: phi1_T4_y(n, *phi_args),
                                       [0, mp_ctx.inf])
                 else:
-                    # res = mp_ctx.nsum(lambda n: phi1_T1_x(n, *phi_args),
-                    #                   [0, mp_ctx.inf])
-
                     res = mp_ctx.nsum(lambda n: phi1_T2_x(n, *phi_args),
                                       [0, mp_ctx.inf])
                 if keep_exp_const:
