@@ -58,14 +58,47 @@ def test_horn_y_singular(mp_test_ctx):
     xys = [[0.5, 1], [0, 1], [10, 1], [-10, 1]]
 
     for xy in xys:
-        assert horn_phi1(*(phi_args + xy)) == mp_test_ctx.inf
+        assert horn_phi1(*(phi_args + xy),
+                         keep_exp_const=True) == mp_test_ctx.inf
 
+
+@pytest.mark.parametrize("mp_test_ctx", [mp, fp])
+def test_horn_x_large(mp_test_ctx):
+    r""" Test large values.
+    """
+    hsplus.horn_numeric.mp_ctx = mp_test_ctx
+
+    phi_args = [1.0, 1, 1.5]
+    xys = [[-1e50, 1], [-1e50, 0], [1e50, 1], [1e50, 0]]
+
+    for xy in xys:
+        horn_phi1(*(phi_args + xy), keep_exp_const=False)
+
+
+def scratch():
     # hsplus.horn_numeric.mp_ctx = fp
     # hsplus.horn_numeric.mp_ctx = mp
 
     # phi_args = (2.0, 1, 2.5, -1e10, 1)
+    # phi_args = (2.0, 1.0, 2.5, -1.2765851981127816, 0.8646647167633875)
+    # phi_args = (2.0, 1.0, 2.5, -10.2765851981127816, 0.8646647167633875)
+    # phi_args = (.5, 1.0, 1.5, 10.2765851981127816, 0.9646647167633875)
+    # phi_args = (0.5, 1.0, 2.5, 5e+39, 0.9909297052154195)
+    # phi_args = (0.5, 1.0, 2.5, 5e+39, 0.0)
+    # phi_args = (0.5, 1.0, 2.5, -1e+5, 0.0)
+    # phi_args = (1.0, 1, 1.5, -1.0000000000000001e+50, 0)
+    # phi_args = (2.0, 1.0, 2.5, -5000.0, 0.75)
+    # phi_args = (0.5, 1.0, 2.5, 1e2, -3525505.76819088)
+    # phi_args = (0.5, 1.0, 3.5, 1e2, -3525505.76819088)
 
-    # horn_phi1(*phi_args)
+    E_kappa(1e+01, sigma=1., tau=2., n=1)
+    E_kappa(1e+01, sigma=1., tau=1., n=1)
+
+    phi_args = (0.5, 1.0, 2.5, 5000000000.0, 0.0)
+    phi_args = (0.5, 1.0, 2.5, 50.0, 0.0)
+    # FIXME: why is E_kappa (above) always ~0.6 (i.e. phi_1 ratio = 1)?
+
+    horn_phi1(*phi_args, keep_exp_const=False)
     # # %timeit horn_phi1(*phi_args)
 
     # mp.nsum(lambda n: phi1_T1_x(n, *phi_args), [0, mp.inf])
@@ -80,12 +113,14 @@ def test_horn_y_singular(mp_test_ctx):
     # mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T4_y(n, *phi_args), [0, mp.inf])
     # # %timeit mp.exp(phi_args[-2]) * mp.nsum(lambda n: phi1_T4_y(n, *phi_args), [0, mp.inf])
 
-def test_sure_points():
 
-    # SURE_hib(np.array([1., 2.]), np.ones(2), np.array([1., 2.]))
+def test_sure_points():
+    r"""SURE values should converge to 2 for large ::math::`y`.
+    """
 
     sure_val_1 = SURE_hib(1.53522076e+01, sigma=1., tau=1.)
-    np.testing.assert_almost_equal(sure_val_1, 2.03431435, decimal=4)
+
+    np.testing.assert_almost_equal(sure_val_1, 2.0, decimal=4)
 
     sure_val_6 = SURE_hib(np.array([1e3, 1e4, -1e20, 1e20]),
                           sigma=1.,
@@ -93,5 +128,6 @@ def test_sure_points():
     np.testing.assert_almost_equal(sure_val_6, 2.0, decimal=4)
 
     sure_val_7 = SURE_hib(np.array([1e2, 1e3]), sigma=1., tau=0.5)
+
     np.testing.assert_almost_equal(sure_val_7[0], 2.0, decimal=2)
     np.testing.assert_almost_equal(sure_val_7[1], 2.0, decimal=3)

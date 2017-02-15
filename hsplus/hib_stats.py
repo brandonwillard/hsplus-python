@@ -166,14 +166,18 @@ def E_kappa(y, sigma=1., tau=1., a=0.5, b=0.5, s=0., n=1.,
     res_denom = horn_phi1_fn(b, 1., a_p + b, s_p, tau_term,
                              keep_exp_const=False)
 
-    # XXX FIXME: A hack, but not completely without sense.  The numerator
-    # should diverge slower than the denominator.  We'll keep the
-    # division so that a warning is emitted, but this needs to be
-    # handled properly.
-    res_ratio = res_num/res_denom
-    res_ratio[np.isinf(res_num)] = 1
+    # XXX FIXME: A finite precision hack!  We're just assuming that the
+    # numerator diverges faster.  Is this *always* the case?  What if the ratio
+    # converges to 1?
+
+    res_ratio = np.array([0 if mp_ctx.isinf(n_) else n_/d_
+                          for n_, d_ in zip(np.atleast_1d(res_num),
+                                            np.atleast_1d(res_denom))],
+                         dtype=np.object)
 
     res *= res_ratio
+
+    #assert all(0 <= res) and all(res <= 1)
 
     return res
 
