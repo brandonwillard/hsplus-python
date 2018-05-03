@@ -17,7 +17,7 @@ Specifically,
 
 Install directly from the repository with the following:
 ```
-$ pip install git+https://bitbucket.org/bayes-horseshoe-plus/hsplus-python-pkg
+$ pip install git+https://github.com/brandonwillard/hsplus-python
 ```
 
 ## Development
