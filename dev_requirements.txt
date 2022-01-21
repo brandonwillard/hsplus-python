@@ -1,7 +1,7 @@
 ipdb==0.9.0
 ipykernel==4.1.1
 ipyparallel==5.0.1
-ipython==4.0.0
+ipython==7.16.3
 joblib==0.9.4
 numpy==1.10.4
 mpmath==0.19
