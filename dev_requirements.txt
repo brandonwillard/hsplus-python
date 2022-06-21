@@ -3,7 +3,7 @@ ipykernel==4.1.1
 ipyparallel==5.0.1
 ipython==7.16.3
 joblib==0.9.4
-numpy==1.21.0
+numpy==1.22.0
 mpmath==0.19
 scipy==0.17.0
 Pygments==2.7.4
